@@ -1,0 +1,16 @@
+name: local_storage
+description: Local storage package for internal use
+version: 1.0.0
+# repository: https://github.com/my_org/my_repo
+
+environment:
+  sdk: ">=3.2.2 <4.0.0"
+
+# Add regular dependencies here.
+dependencies:
+  flutter:
+    sdk: "flutter"
+  hive_flutter: ^1.1.0
+
+dev_dependencies:
+  lints: ^6.0.0

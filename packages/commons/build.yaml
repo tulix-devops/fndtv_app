@@ -1,0 +1,27 @@
+targets:
+  $default:
+    builders:
+      # json_serializable:
+      #   generate_for:
+      #     include:
+      #       - "lib/**_entity.dart"
+      #       - "lib/**_bloc.dart"
+      #       - "lib/**_cubit.dart"
+      #       - "packages/commons/lib/auth/domain/entities/entities.dart"
+      #       - "packages/commons/lib/auth/presentation/cubit/auth_cubit.dart"
+
+
+      freezed:
+        options:
+          # Disable the generation of copyWith/== for the entire project
+          # copy_with: false
+          # equal: false
+          # `when` and `map` can be enabled/disabled entirely by setting them to `true`/`false`
+          map: false
+          when: false
+
+          # We can also enable/disable specific variants of `when`/`map` by setting them to `true`/`false`:
+          # when:
+          # when: true
+          # maybe_when: true
+          # when_or_null: false

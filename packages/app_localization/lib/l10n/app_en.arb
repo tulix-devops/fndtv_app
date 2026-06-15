@@ -1,0 +1,13 @@
+{
+"loginPageSubtitle" : "Sign into the application",
+"signUpPageTitle" : "Sign up page",
+"error404": "The record was not found",
+"error401": "Authorization error occurred",
+"error500": "Unknown error try again later",
+"loginSuccess": "Signed in succesfully",
+"loginError": "Email or password is wrong",
+"loginButtonLabel": "Login",
+"signUpButtonLabel": "Sign up",
+"signUpSuccess": "Sign up was a success",
+"signUpError": "Try again later"
+}
