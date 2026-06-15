@@ -9,9 +9,8 @@ abstract final class Assets {
   static const String google = 'assets/svg/google-icon.svg';
   static const String fb = 'assets/svg/fb-icon.svg';
 
-  /// world changer logo
-  static const String logo = 'assets/img/original-logo.png';
-  static const String topBoxLogo = 'assets/img/settopbox_sda_icon.png';
+  /// FNDTV logo
+  static const String logo = 'assets/img/main_logo_transparent.png';
 
   static const String donationQr = 'assets/img/donation_qr.png';
 

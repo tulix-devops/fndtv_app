@@ -79,12 +79,7 @@ flutter:
   assets:
     - assets/svg/
     - assets/img/
-    - app-logos/
   fonts:
-    - family: FNDTVBubble
-      fonts:
-        - asset: assets/FNDTVBubble-Regular.ttf
-          weight: 400
     - family: Urbanist
       fonts:
         - asset: assets/fonts/Urbanist-Bold.ttf
