@@ -13,6 +13,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:fndtv/src/index.dart';
 import 'package:fndtv/src/ui/app_view.dart';
 import 'package:fndtv/src/ui/pages/main/main_container_page.dart';
+import 'package:fndtv/src/ui/pages/live_detail/new_live_detail_page.dart';
 
 import 'package:ui_kit/ui_kit.dart';
 import 'package:app_localization/app_localization.dart';
@@ -185,6 +186,17 @@ MaterialPageRoute<dynamic> onGenerateRoute(
             ],
             child: VideoPlayerPage(video: content, contentType: contentType),
           ),
+        );
+
+      case NewLiveDetailPage.path:
+        final args = settings.arguments as Map<String, dynamic>;
+        final LiveModel channel = args['channel'] as LiveModel;
+
+        page = RepositoryProvider<ContentRepository>(
+          create: (context) => ContentRepositoryImpl(
+            dataSource: ContentDataSource(context.read<CustomHTTPClient>()),
+          ),
+          child: NewLiveDetailPage(channel: channel),
         );
 
       case MobileChannelDetailPage.path:

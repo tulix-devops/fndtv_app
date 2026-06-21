@@ -1,6 +1,7 @@
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:app_localization/app_localization.dart';
 import 'package:fndtv/src/core/constants/fndtv_channels.dart';
 import 'package:ui_kit/ui_kit.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -9,25 +10,6 @@ class NewAboutPage extends StatelessWidget {
   final FndtvLanguage language;
 
   const NewAboutPage({super.key, required this.language});
-
-  /// "What is FNDTV?" paragraphs.
-  static const List<String> _intro = [
-    'FNDTV is an IPTV / OTT platform accessible from anywhere in the world, '
-        'for the family, the maintaining of Catholic Tradition, Christian Unity, '
-        'Religious Freedom and Human Rights.',
-    'FNDTV is also made of religious Nuns, Friars, Priests and Tertiaries '
-        'filled with energy and determination, towards God’s glory and the '
-        'Evangelization, offering their lives for the Salvation of souls and '
-        'making themselves available to the poorest of the poor and all those '
-        'who suffer in their heart or in their body, with no distinction of '
-        'social status, race, gender or creed.',
-    'Learn how to know them, through their television programs.',
-    'They dedicate themselves unreservedly towards offering this valuable '
-        'content to you, day and night, no matter the weather or circumstances.',
-    'Share in their joy, peace and love of God which prompted them to create '
-        'this TV Platform for you, your family, and in order to help you keep '
-        'the Faith and uphold Christian Values, despite everything and everyone!',
-  ];
 
   /// Donation links by language.
   static const Map<FndtvLanguage, String> _donationUrls = {
@@ -42,6 +24,8 @@ class NewAboutPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.uiKitColors;
+    final l = context.l;
+    final intro = [l.aboutIntro1, l.aboutIntro2, l.aboutIntro3, l.aboutIntro4, l.aboutIntro5];
 
     return Scaffold(
       backgroundColor: colors.bgPrimary,
@@ -73,9 +57,9 @@ class NewAboutPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _Heading(text: 'What is FNDTV?', colors: colors),
+                  _Heading(text: l.aboutWhatTitle, colors: colors),
                   const SizedBox(height: 14),
-                  for (final paragraph in _intro) ...[
+                  for (final paragraph in intro) ...[
                     Text(
                       paragraph,
                       style: GoogleFonts.sora(
@@ -90,7 +74,7 @@ class NewAboutPage extends StatelessWidget {
                   const SizedBox(height: 8),
                   // Address
                   Text(
-                    'FNDTV PLATFORM',
+                    l.aboutPlatform,
                     style: GoogleFonts.sora(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -117,10 +101,10 @@ class NewAboutPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _Heading(text: 'Support FNDTV', colors: colors),
+                  _Heading(text: l.aboutSupportTitle, colors: colors),
                   const SizedBox(height: 10),
                   Text(
-                    'Help FNDTV keep broadcasting. Tap below to donate:',
+                    l.aboutDonatePrompt,
                     style: GoogleFonts.sora(
                       fontSize: 15,
                       fontWeight: FontWeight.w400,
@@ -220,7 +204,7 @@ class _DonationButton extends StatelessWidget {
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open the donation page')),
+        SnackBar(content: Text(context.l.donationOpenError)),
       );
     }
   }
@@ -246,7 +230,7 @@ class _DonationButton extends StatelessWidget {
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
-                  'Donate',
+                  context.l.donate,
                   style: GoogleFonts.sora(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,

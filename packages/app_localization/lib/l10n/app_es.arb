@@ -1,0 +1,64 @@
+{
+  "@@locale": "es",
+
+  "loginPageSubtitle": "Inicie sesión en la aplicación",
+  "signUpPageTitle": "Página de registro",
+  "error404": "No se encontró el registro",
+  "error401": "Se produjo un error de autorización",
+  "error500": "Error desconocido, inténtelo más tarde",
+  "loginSuccess": "Sesión iniciada correctamente",
+  "loginError": "Correo o contraseña incorrectos",
+  "loginButtonLabel": "Iniciar sesión",
+  "signUpButtonLabel": "Registrarse",
+  "signUpSuccess": "Registro exitoso",
+  "signUpError": "Inténtelo más tarde",
+
+  "navHome": "Inicio",
+  "navLive": "En vivo",
+  "navRadio": "Radio",
+  "navAbout": "Acerca de",
+
+  "tabTitleHome": "INICIO",
+  "tabTitleLive": "EN VIVO",
+  "tabTitleRadio": "RADIO",
+  "tabTitleAbout": "ACERCA DE FNDTV",
+
+  "tabSubtitleHome": "Bienvenido a FNDTV",
+  "tabSubtitleLive": "Vea los canales en vivo de FNDTV",
+  "tabSubtitleRadio": "Escuche la radio FNDTV",
+
+  "selectLanguage": "Seleccionar idioma",
+
+  "sectionLiveNow": "En vivo ahora",
+  "sectionChicagoTime": "Hora de Chicago",
+  "sectionRadio": "Radio",
+  "sectionLiveTv": "TV en vivo",
+
+  "badgeLive": "EN VIVO",
+  "badgeUsTime": "HORA EE. UU.",
+  "badgeOnAir": "AL AIRE",
+
+  "brandRadio": "FNDTV Radio",
+  "noRadioChannel": "No hay ningún canal de radio disponible",
+
+  "archive": "Archivo",
+  "scheduleLoadError": "No se pudo cargar la programación",
+  "noSchedule": "No hay programación disponible",
+  "channelsLoadError": "Error al cargar los canales",
+  "retry": "Reintentar",
+
+  "aboutWhatTitle": "¿Qué es FNDTV?",
+  "aboutIntro1": "FNDTV es una plataforma IPTV / OTT accesible desde cualquier parte del mundo, para la familia, el mantenimiento de la Tradición católica, la Unidad cristiana, la Libertad religiosa y los Derechos Humanos.",
+  "aboutIntro2": "FNDTV está formada también por Religiosas, Frailes, Sacerdotes y Terciarios llenos de energía y determinación, para la gloria de Dios y la Evangelización, ofreciendo sus vidas por la Salvación de las almas y poniéndose a disposición de los más pobres entre los pobres y de todos los que sufren en su corazón o en su cuerpo, sin distinción de condición social, raza, género o credo.",
+  "aboutIntro3": "Aprenda a conocerlos a través de sus programas de televisión.",
+  "aboutIntro4": "Se dedican sin reservas a ofrecerle este valioso contenido, día y noche, sin importar el clima ni las circunstancias.",
+  "aboutIntro5": "¡Comparta su alegría, su paz y su amor de Dios, que los impulsaron a crear esta plataforma de televisión para usted, su familia, y para ayudarle a conservar la Fe y a defender los Valores cristianos, a pesar de todo y de todos!",
+  "aboutPlatform": "PLATAFORMA FNDTV",
+  "aboutSupportTitle": "Apoye a FNDTV",
+  "aboutDonatePrompt": "Ayude a FNDTV a seguir emitiendo. Pulse abajo para donar:",
+  "donate": "Donar",
+  "donationOpenError": "No se pudo abrir la página de donación",
+
+  "settingsBlueTheme": "Tema azul",
+  "settingsDarkTheme": "Tema oscuro"
+}

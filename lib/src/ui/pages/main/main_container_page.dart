@@ -1,7 +1,9 @@
 ﻿import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:fndtv/src/bloc/content_cubit/content_cubit.dart';
 import 'package:fndtv/src/core/constants/fndtv_channels.dart';
 import 'package:fndtv/src/ui/pages/home/new_home_page.dart';
 import 'package:fndtv/src/ui/pages/live/new_live_page.dart';
@@ -9,6 +11,8 @@ import 'package:fndtv/src/ui/pages/radio/new_radio_page.dart';
 import 'package:fndtv/src/ui/pages/about/new_about_page.dart';
 import 'package:fndtv/src/ui/pages/settings/settings_page.dart';
 import 'package:fndtv/src/ui/widgets/fndtv_bottom_navigation_bar.dart';
+import 'package:fndtv/src/ui/widgets/radio/radio_mini_bar.dart';
+import 'package:app_localization/app_localization.dart';
 
 class MainContainerPage extends StatefulWidget {
   static const path = '/main';
@@ -23,14 +27,6 @@ class MainContainerPage extends StatefulWidget {
 class _MainContainerPageState extends State<MainContainerPage> {
   int _currentIndex = 0;
   late PageController _pageController;
-  FndtvLanguage _selectedLanguage = FndtvLanguage.french;
-
-  List<Widget> get _pages => [
-    NewHomePage(language: _selectedLanguage),
-    NewLivePage(language: _selectedLanguage),
-    NewRadioPage(language: _selectedLanguage),
-    NewAboutPage(language: _selectedLanguage),
-  ];
 
   @override
   void initState() {
@@ -47,6 +43,8 @@ class _MainContainerPageState extends State<MainContainerPage> {
         statusBarBrightness: Brightness.dark,
       ),
     );
+    // Load live (type 8) + radio (type 10) channels from the API.
+    context.read<ContentCubit>().getContentForMultipleTypes([8, 10]);
   }
 
   @override
@@ -69,11 +67,22 @@ class _MainContainerPageState extends State<MainContainerPage> {
     );
   }
 
-  static const _tabTitles = ['HOME', 'LIVE', 'RADIO', 'ABOUT FNDTV'];
-  static const _tabSubtitles = ['Welcome to FNDTV', 'Watch FNDTV Live Channels', 'Listen to FNDTV Radio', ''];
-
   @override
   Widget build(BuildContext context) {
+    final l = context.l;
+    final tabTitles = [l.tabTitleHome, l.tabTitleLive, l.tabTitleRadio, l.tabTitleAbout];
+    final tabSubtitles = [l.tabSubtitleHome, l.tabSubtitleLive, l.tabSubtitleRadio, ''];
+    // Language drives both the UI locale and the channel-language filter; derive
+    // it from the LocalizationCubit so a persisted locale stays in sync.
+    final selectedLanguage = FndtvLanguage.fromLocaleCode(
+      context.watch<LocalizationCubit>().state.locale.languageCode,
+    );
+    final pages = [
+      NewHomePage(language: selectedLanguage),
+      NewLivePage(language: selectedLanguage),
+      NewRadioPage(language: selectedLanguage),
+      NewAboutPage(language: selectedLanguage),
+    ];
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Color(0xFFA83734), // red strip (non-edge-to-edge fallback)
@@ -102,7 +111,7 @@ class _MainContainerPageState extends State<MainContainerPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          _tabTitles[_currentIndex],
+                          tabTitles[_currentIndex],
                           style: GoogleFonts.sora(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
@@ -110,9 +119,9 @@ class _MainContainerPageState extends State<MainContainerPage> {
                             letterSpacing: 1.2,
                           ),
                         ),
-                        if (_tabSubtitles[_currentIndex].isNotEmpty)
+                        if (tabSubtitles[_currentIndex].isNotEmpty)
                           Text(
-                            _tabSubtitles[_currentIndex],
+                            tabSubtitles[_currentIndex],
                             style: GoogleFonts.sora(
                               fontSize: 10,
                               fontWeight: FontWeight.w400,
@@ -122,10 +131,12 @@ class _MainContainerPageState extends State<MainContainerPage> {
                       ],
                     ),
                   ),
-                  // Language selector (filters channels by language)
+                  // Language selector — switches both the UI locale and the
+                  // channel-language filter.
                   _LanguageSelector(
-                    selected: _selectedLanguage,
-                    onChanged: (lang) => setState(() => _selectedLanguage = lang),
+                    selected: selectedLanguage,
+                    onChanged: (lang) =>
+                        context.read<LocalizationCubit>().setLocale(lang.localeCode),
                   ),
                   // Settings button on About tab
                   if (_currentIndex == 3) ...[
@@ -144,14 +155,21 @@ class _MainContainerPageState extends State<MainContainerPage> {
               controller: _pageController,
               onPageChanged: _onPageChanged,
               physics: const BouncingScrollPhysics(),
-              children: _pages,
+              children: pages,
             ),
           ),
         ],
       ),
-      bottomNavigationBar: FNDTVBottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: _onTabTapped,
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Spotify-style persistent radio mini-player (hidden when idle)
+          const RadioMiniBar(),
+          FNDTVBottomNavigationBar(
+            currentIndex: _currentIndex,
+            onTap: _onTabTapped,
+          ),
+        ],
       ),
       ),
     );
@@ -173,7 +191,7 @@ class _LanguageSelector extends StatelessWidget {
     return PopupMenuButton<FndtvLanguage>(
       initialValue: selected,
       onSelected: onChanged,
-      tooltip: 'Select language',
+      tooltip: context.l.selectLanguage,
       color: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       itemBuilder: (context) => FndtvLanguage.values.map((lang) {
@@ -190,7 +208,7 @@ class _LanguageSelector extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Text(
-                lang.label,
+                lang.endonym,
                 style: GoogleFonts.sora(
                   fontSize: 14,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,

@@ -32,6 +32,39 @@ enum FndtvLanguage {
   /// ISO country code used to render the flag (French→FR, English→GB,
   /// Spanish→ES).
   final String countryCode;
+
+  /// App UI locale code (French→`fr`, English→`en`, Spanish→`es`).
+  /// Note this differs from [code] for Spanish (`sp` vs `es`).
+  String get localeCode => switch (this) {
+        FndtvLanguage.french => 'fr',
+        FndtvLanguage.english => 'en',
+        FndtvLanguage.spanish => 'es',
+      };
+
+  /// Endonym shown in the language picker regardless of the active UI locale.
+  String get endonym => switch (this) {
+        FndtvLanguage.french => 'Français',
+        FndtvLanguage.english => 'English',
+        FndtvLanguage.spanish => 'Español',
+      };
+
+  /// Resolves a UI locale code (`fr` / `en` / `es`) back to a [FndtvLanguage],
+  /// defaulting to French.
+  static FndtvLanguage fromLocaleCode(String code) => switch (code) {
+        'en' => FndtvLanguage.english,
+        'es' => FndtvLanguage.spanish,
+        _ => FndtvLanguage.french,
+      };
+}
+
+/// Filters API channels ([LiveModel]) to those matching [lang] via
+/// `details.language` ("French"/"English"/"Spanish").
+List<LiveModel> channelsForLanguage(List<LiveModel>? items, FndtvLanguage lang) {
+  if (items == null) return const [];
+  final code = lang.label.toLowerCase();
+  return items
+      .where((m) => (m.details?.language ?? '').toLowerCase() == code)
+      .toList();
 }
 
 /// Which group a channel belongs to.

@@ -1,5 +1,7 @@
 ﻿package com.fndtv.videoplayer
 
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 
-class MainActivity : FlutterActivity()
+// Must extend AudioServiceActivity (not FlutterActivity) so just_audio_background
+// can attach the media session to the correct FlutterEngine.
+class MainActivity : AudioServiceActivity()

@@ -5,6 +5,9 @@ extension LocalizationExtension on BuildContext {
   AppLocalizations get l => AppLocalizations.of(this);
 }
 
-const String georgianLocaleKey = 'ka';
-const String defaultLocaleKey = georgianLocaleKey;
+const String frenchLocaleKey = 'fr';
 const String englishLocalekey = 'en';
+const String spanishLocaleKey = 'es';
+
+/// FNDTV launches in French by default.
+const String defaultLocaleKey = frenchLocaleKey;

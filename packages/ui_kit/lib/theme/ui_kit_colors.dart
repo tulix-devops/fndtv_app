@@ -65,9 +65,9 @@ class UiKitColors {
   /// (Enum value is still named `blue` for backwards compatibility, but the
   /// palette is the FNDTV light/red brand.)
   static const blue = UiKitColors(
-    bgPrimary: Color(0xFFECEEF1),     // Main background (dimmed soft grey)
+    bgPrimary: Color(0xFFECEEF1),     // Light background (white-ish)
     bgSurface: Color(0xFFF4F6F8),     // Light surface
-    bgCard: Color(0xFFFFFFFF),        // Card background (white, pops on grey)
+    bgCard: Color(0xFFFFFFFF),        // Card background (white)
     bgCardHover: Color(0xFFF7F8FA),   // Hovered/active card
     bgHero: Color(0xFFF4F6F8),        // Hero area background
     border: Color(0xFFE1E4E9),        // Subtle border

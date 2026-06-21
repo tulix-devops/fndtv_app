@@ -189,6 +189,29 @@ class LiveModel extends Equatable {
   // Helper to check if this is the "FNDTV - Live/DVR" main channel
   bool get isMainChannel => title.contains('FNDTV') && title.contains('Live');
 
+  /// True for the Chicago/US time-shift variant (detected from stream URL/title).
+  bool get isTimeShift =>
+      (sources.primary ?? sources.hls ?? '').contains('tshift') ||
+      title.contains('(US');
+
+  /// Programs parsed from the `seasons` map — the EPG / DVR schedule.
+  List<LiveModel> get scheduleItems {
+    final dynamic s = seasons;
+    final result = <LiveModel>[];
+    if (s is Map) {
+      for (final value in s.values) {
+        if (value is List) {
+          for (final item in value) {
+            if (item is Map<String, dynamic>) {
+              result.add(LiveModel.fromJson(item));
+            }
+          }
+        }
+      }
+    }
+    return result;
+  }
+
   @override
   String toString() {
     return 'LiveModel(id: $id, title: $title, type: $type, live: $live)';

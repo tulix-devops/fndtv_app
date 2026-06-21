@@ -29,6 +29,20 @@ final class ContentDataSource with ApiCallHandler {
     );
   }
 
+  /// Fetches a single channel's detail (includes `seasons` = EPG/DVR programs).
+  Future<ResponseModel<LiveModel>> getContentDetail({
+    required int contentType,
+    required int id,
+    String? date,
+  }) {
+    return handleApiCall<LiveModel>(
+      url: APIList.getContentDetail(contentType: contentType, id: id, date: date),
+      httpMethod: HttpMethod.get,
+      dataMapper: LiveModel.fromJson,
+      client: _client,
+    );
+  }
+
   Future<ResponseModel<DvrDataModel>> getDvrData({required String url}) async {
     try {
       final response = await _client.get(Uri.parse(url));

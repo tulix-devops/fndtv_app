@@ -6,6 +6,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
 
 import 'app_localizations_en.dart';
+import 'app_localizations_es.dart';
+import 'app_localizations_fr.dart';
 
 // ignore_for_file: type=lint
 
@@ -92,7 +94,11 @@ abstract class AppLocalizations {
   ];
 
   /// A list of this localizations delegate's supported locales.
-  static const List<Locale> supportedLocales = <Locale>[Locale('en')];
+  static const List<Locale> supportedLocales = <Locale>[
+    Locale('en'),
+    Locale('es'),
+    Locale('fr')
+  ];
 
   /// No description provided for @loginPageSubtitle.
   ///
@@ -159,6 +165,240 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Try again later'**
   String get signUpError;
+
+  /// No description provided for @navHome.
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get navHome;
+
+  /// No description provided for @navLive.
+  ///
+  /// In en, this message translates to:
+  /// **'Live'**
+  String get navLive;
+
+  /// No description provided for @navRadio.
+  ///
+  /// In en, this message translates to:
+  /// **'Radio'**
+  String get navRadio;
+
+  /// No description provided for @navAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get navAbout;
+
+  /// No description provided for @tabTitleHome.
+  ///
+  /// In en, this message translates to:
+  /// **'HOME'**
+  String get tabTitleHome;
+
+  /// No description provided for @tabTitleLive.
+  ///
+  /// In en, this message translates to:
+  /// **'LIVE'**
+  String get tabTitleLive;
+
+  /// No description provided for @tabTitleRadio.
+  ///
+  /// In en, this message translates to:
+  /// **'RADIO'**
+  String get tabTitleRadio;
+
+  /// No description provided for @tabTitleAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'ABOUT FNDTV'**
+  String get tabTitleAbout;
+
+  /// No description provided for @tabSubtitleHome.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome to FNDTV'**
+  String get tabSubtitleHome;
+
+  /// No description provided for @tabSubtitleLive.
+  ///
+  /// In en, this message translates to:
+  /// **'Watch FNDTV Live Channels'**
+  String get tabSubtitleLive;
+
+  /// No description provided for @tabSubtitleRadio.
+  ///
+  /// In en, this message translates to:
+  /// **'Listen to FNDTV Radio'**
+  String get tabSubtitleRadio;
+
+  /// No description provided for @selectLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Select language'**
+  String get selectLanguage;
+
+  /// No description provided for @sectionLiveNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Live now'**
+  String get sectionLiveNow;
+
+  /// No description provided for @sectionChicagoTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Chicago time'**
+  String get sectionChicagoTime;
+
+  /// No description provided for @sectionRadio.
+  ///
+  /// In en, this message translates to:
+  /// **'Radio'**
+  String get sectionRadio;
+
+  /// No description provided for @sectionLiveTv.
+  ///
+  /// In en, this message translates to:
+  /// **'Live TV'**
+  String get sectionLiveTv;
+
+  /// No description provided for @badgeLive.
+  ///
+  /// In en, this message translates to:
+  /// **'LIVE'**
+  String get badgeLive;
+
+  /// No description provided for @badgeUsTime.
+  ///
+  /// In en, this message translates to:
+  /// **'US TIME'**
+  String get badgeUsTime;
+
+  /// No description provided for @badgeOnAir.
+  ///
+  /// In en, this message translates to:
+  /// **'ON AIR'**
+  String get badgeOnAir;
+
+  /// No description provided for @brandRadio.
+  ///
+  /// In en, this message translates to:
+  /// **'FNDTV Radio'**
+  String get brandRadio;
+
+  /// No description provided for @noRadioChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'No radio channel available'**
+  String get noRadioChannel;
+
+  /// No description provided for @archive.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive'**
+  String get archive;
+
+  /// No description provided for @scheduleLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the schedule'**
+  String get scheduleLoadError;
+
+  /// No description provided for @noSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'No schedule available'**
+  String get noSchedule;
+
+  /// No description provided for @channelsLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load channels'**
+  String get channelsLoadError;
+
+  /// No description provided for @retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get retry;
+
+  /// No description provided for @aboutWhatTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What is FNDTV?'**
+  String get aboutWhatTitle;
+
+  /// No description provided for @aboutIntro1.
+  ///
+  /// In en, this message translates to:
+  /// **'FNDTV is an IPTV / OTT platform accessible from anywhere in the world, for the family, the maintaining of Catholic Tradition, Christian Unity, Religious Freedom and Human Rights.'**
+  String get aboutIntro1;
+
+  /// No description provided for @aboutIntro2.
+  ///
+  /// In en, this message translates to:
+  /// **'FNDTV is also made of religious Nuns, Friars, Priests and Tertiaries filled with energy and determination, towards God’s glory and the Evangelization, offering their lives for the Salvation of souls and making themselves available to the poorest of the poor and all those who suffer in their heart or in their body, with no distinction of social status, race, gender or creed.'**
+  String get aboutIntro2;
+
+  /// No description provided for @aboutIntro3.
+  ///
+  /// In en, this message translates to:
+  /// **'Learn how to know them, through their television programs.'**
+  String get aboutIntro3;
+
+  /// No description provided for @aboutIntro4.
+  ///
+  /// In en, this message translates to:
+  /// **'They dedicate themselves unreservedly towards offering this valuable content to you, day and night, no matter the weather or circumstances.'**
+  String get aboutIntro4;
+
+  /// No description provided for @aboutIntro5.
+  ///
+  /// In en, this message translates to:
+  /// **'Share in their joy, peace and love of God which prompted them to create this TV Platform for you, your family, and in order to help you keep the Faith and uphold Christian Values, despite everything and everyone!'**
+  String get aboutIntro5;
+
+  /// No description provided for @aboutPlatform.
+  ///
+  /// In en, this message translates to:
+  /// **'FNDTV PLATFORM'**
+  String get aboutPlatform;
+
+  /// No description provided for @aboutSupportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Support FNDTV'**
+  String get aboutSupportTitle;
+
+  /// No description provided for @aboutDonatePrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Help FNDTV keep broadcasting. Tap below to donate:'**
+  String get aboutDonatePrompt;
+
+  /// No description provided for @donate.
+  ///
+  /// In en, this message translates to:
+  /// **'Donate'**
+  String get donate;
+
+  /// No description provided for @donationOpenError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the donation page'**
+  String get donationOpenError;
+
+  /// No description provided for @settingsBlueTheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Blue Theme'**
+  String get settingsBlueTheme;
+
+  /// No description provided for @settingsDarkTheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark Theme'**
+  String get settingsDarkTheme;
 }
 
 class _AppLocalizationsDelegate
@@ -172,7 +412,7 @@ class _AppLocalizationsDelegate
 
   @override
   bool isSupported(Locale locale) =>
-      <String>['en'].contains(locale.languageCode);
+      <String>['en', 'es', 'fr'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
@@ -183,6 +423,10 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   switch (locale.languageCode) {
     case 'en':
       return AppLocalizationsEn();
+    case 'es':
+      return AppLocalizationsEs();
+    case 'fr':
+      return AppLocalizationsFr();
   }
 
   throw FlutterError(

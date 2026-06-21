@@ -22,13 +22,13 @@ class DetailsModel extends Equatable {
 
   factory DetailsModel.fromJson(Map<String, dynamic> json) => DetailsModel(
         id: json['id'] != null ? int.tryParse(json['id'].toString()) : null,
-        tagline: json['tagline'] as String?,
-        copyright: json['copyright'] as String?,
-        studio: json['studio'] as String?,
-        sku: json['sku'] as String?,
-        imdbId: json['imdbId'] as String?,
-        productionYear: json['productionYear'] as String?,
-        language: json['language'] as String?,
+        tagline: json['tagline']?.toString(),
+        copyright: json['copyright']?.toString(),
+        studio: json['studio']?.toString(),
+        sku: json['sku']?.toString(),
+        imdbId: json['imdbId']?.toString(),
+        productionYear: json['productionYear']?.toString(),
+        language: json['language']?.toString(),
       );
 
   Map<String, dynamic> toJson() {

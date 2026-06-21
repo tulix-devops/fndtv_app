@@ -1,13 +1,64 @@
 {
-"loginPageSubtitle" : "Sign into the application",
-"signUpPageTitle" : "Sign up page",
-"error404": "The record was not found",
-"error401": "Authorization error occurred",
-"error500": "Unknown error try again later",
-"loginSuccess": "Signed in succesfully",
-"loginError": "Email or password is wrong",
-"loginButtonLabel": "Login",
-"signUpButtonLabel": "Sign up",
-"signUpSuccess": "Sign up was a success",
-"signUpError": "Try again later"
+  "@@locale": "en",
+
+  "loginPageSubtitle": "Sign into the application",
+  "signUpPageTitle": "Sign up page",
+  "error404": "The record was not found",
+  "error401": "Authorization error occurred",
+  "error500": "Unknown error try again later",
+  "loginSuccess": "Signed in succesfully",
+  "loginError": "Email or password is wrong",
+  "loginButtonLabel": "Login",
+  "signUpButtonLabel": "Sign up",
+  "signUpSuccess": "Sign up was a success",
+  "signUpError": "Try again later",
+
+  "navHome": "Home",
+  "navLive": "Live",
+  "navRadio": "Radio",
+  "navAbout": "About",
+
+  "tabTitleHome": "HOME",
+  "tabTitleLive": "LIVE",
+  "tabTitleRadio": "RADIO",
+  "tabTitleAbout": "ABOUT FNDTV",
+
+  "tabSubtitleHome": "Welcome to FNDTV",
+  "tabSubtitleLive": "Watch FNDTV Live Channels",
+  "tabSubtitleRadio": "Listen to FNDTV Radio",
+
+  "selectLanguage": "Select language",
+
+  "sectionLiveNow": "Live now",
+  "sectionChicagoTime": "Chicago time",
+  "sectionRadio": "Radio",
+  "sectionLiveTv": "Live TV",
+
+  "badgeLive": "LIVE",
+  "badgeUsTime": "US TIME",
+  "badgeOnAir": "ON AIR",
+
+  "brandRadio": "FNDTV Radio",
+  "noRadioChannel": "No radio channel available",
+
+  "archive": "Archive",
+  "scheduleLoadError": "Could not load the schedule",
+  "noSchedule": "No schedule available",
+  "channelsLoadError": "Failed to load channels",
+  "retry": "Retry",
+
+  "aboutWhatTitle": "What is FNDTV?",
+  "aboutIntro1": "FNDTV is an IPTV / OTT platform accessible from anywhere in the world, for the family, the maintaining of Catholic Tradition, Christian Unity, Religious Freedom and Human Rights.",
+  "aboutIntro2": "FNDTV is also made of religious Nuns, Friars, Priests and Tertiaries filled with energy and determination, towards God’s glory and the Evangelization, offering their lives for the Salvation of souls and making themselves available to the poorest of the poor and all those who suffer in their heart or in their body, with no distinction of social status, race, gender or creed.",
+  "aboutIntro3": "Learn how to know them, through their television programs.",
+  "aboutIntro4": "They dedicate themselves unreservedly towards offering this valuable content to you, day and night, no matter the weather or circumstances.",
+  "aboutIntro5": "Share in their joy, peace and love of God which prompted them to create this TV Platform for you, your family, and in order to help you keep the Faith and uphold Christian Values, despite everything and everyone!",
+  "aboutPlatform": "FNDTV PLATFORM",
+  "aboutSupportTitle": "Support FNDTV",
+  "aboutDonatePrompt": "Help FNDTV keep broadcasting. Tap below to donate:",
+  "donate": "Donate",
+  "donationOpenError": "Could not open the donation page",
+
+  "settingsBlueTheme": "Blue Theme",
+  "settingsDarkTheme": "Dark Theme"
 }

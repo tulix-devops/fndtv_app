@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:app_localization/app_localization.dart';
 import 'package:fndtv/src/bloc/theme_cubit/theme_cubit.dart';
 import 'package:ui_kit/ui_kit.dart';
 
@@ -78,7 +79,7 @@ class SettingsPage extends StatelessWidget {
                         return Column(
                           children: [
                             _ThemeOption(
-                              title: 'Blue Theme',
+                              title: context.l.settingsBlueTheme,
                               description: 'Cool blue tones with light blue accents',
                               isSelected: state.themeMode == AppThemeMode.blue,
                               onTap: () {
@@ -88,7 +89,7 @@ class SettingsPage extends StatelessWidget {
                             ),
                             const SizedBox(height: 12),
                             _ThemeOption(
-                              title: 'Dark Theme',
+                              title: context.l.settingsDarkTheme,
                               description: 'Pure dark with red accents',
                               isSelected: state.themeMode == AppThemeMode.dark,
                               onTap: () {

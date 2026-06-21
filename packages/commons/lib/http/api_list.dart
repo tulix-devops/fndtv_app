@@ -1,8 +1,4 @@
-// const String _url = 'https://208.79.153.183/api';
-// const String _url = 'https://watctv57.tulix.net/api';
-// const String _url = 'http://192.168.1.154:8000/api';
-
-const String _url = 'https://jbs.dineo.uk/api';
+const String _url = 'https://fnd.dineo.uk/api';
 
 class APIList {
   APIList._();
@@ -12,6 +8,18 @@ class APIList {
   static String getContent({required int contentType, int? page}) {
     final baseUrl = '$_url/content/$contentType/list';
     return page != null ? '$baseUrl?page=$page' : baseUrl;
+  }
+
+  /// Single content item (channel) detail, including its `seasons` schedule
+  /// (the EPG / DVR program list). Optional [date] (YYYY-MM-DD) selects the
+  /// archive day (backend support pending — currently returns a rolling window).
+  static String getContentDetail({
+    required int contentType,
+    required int id,
+    String? date,
+  }) {
+    final base = '$_url/content/$contentType/$id';
+    return date != null ? '$base?date=$date' : base;
   }
 
   // Auth endpoints

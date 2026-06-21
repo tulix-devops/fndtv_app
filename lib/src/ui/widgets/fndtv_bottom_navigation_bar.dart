@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:app_localization/app_localization.dart';
 import 'package:ui_kit/ui_kit.dart';
 
 class FNDTVBottomNavigationBar extends StatelessWidget {
@@ -15,6 +16,7 @@ class FNDTVBottomNavigationBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.uiKitColors;
+    final l = context.l;
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Container(
@@ -32,25 +34,25 @@ class FNDTVBottomNavigationBar extends StatelessWidget {
           children: [
             _NavItem(
               icon: Icons.home_rounded,
-              label: 'Home',
+              label: l.navHome,
               isActive: currentIndex == 0,
               onTap: () => onTap(0),
             ),
             _NavItem(
               icon: Icons.podcasts_rounded,
-              label: 'Live',
+              label: l.navLive,
               isActive: currentIndex == 1,
               onTap: () => onTap(1),
             ),
             _NavItem(
               icon: Icons.mic_rounded,
-              label: 'Radio',
+              label: l.navRadio,
               isActive: currentIndex == 2,
               onTap: () => onTap(2),
             ),
             _NavItem(
               icon: Icons.info_rounded,
-              label: 'About',
+              label: l.navAbout,
               isActive: currentIndex == 3,
               onTap: () => onTap(3),
             ),
