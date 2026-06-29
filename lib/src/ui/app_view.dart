@@ -4,7 +4,6 @@ import 'package:app_focus/app_focus.dart';
 import 'package:commons/commons.dart';
 import 'package:intl/intl.dart';
 import 'package:fndtv/src/index.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,10 +11,7 @@ import 'package:ui_kit/ui_kit.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:fndtv/src/data/services/dynamic_channel_service.dart';
 import 'package:fndtv/src/data/models/content/live_model.dart';
-import 'package:fndtv/src/ui/pages/channel_detail/mobile_channel_detail_page.dart';
-import 'package:fndtv/src/ui/pages/video_player/video_player_page.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:fndtv/src/ui/widgets/shared/device_wrapper.dart';
 import 'package:fndtv/src/bloc/content_cubit/content_cubit.dart';
 
 //
@@ -69,7 +65,6 @@ class _AppViewState extends State<AppView> {
     }
   }
 
-
   String getTitle() {
     return 'WATC TV 57';
   }
@@ -77,7 +72,7 @@ class _AppViewState extends State<AppView> {
   @override
   Widget build(BuildContext context) {
     final String title = getTitle();
-    
+
     return FutureBuilder<List<LiveModel>>(
       future: DynamicChannelService.getChannels(),
       builder: (context, snapshot) {
@@ -93,16 +88,16 @@ class _AppViewState extends State<AppView> {
             ),
           );
         }
-        
+
         final channels = snapshot.data ?? [];
-        
+
         return _buildMainContent(context, title, channels);
       },
     );
   }
-  
-  Widget _buildMainContent(BuildContext context, String title, List<LiveModel> channels) {
 
+  Widget _buildMainContent(
+      BuildContext context, String title, List<LiveModel> channels) {
     return AppAuthDialogListener(
       child: AppFocusGroup(
         child: AppScaffold(
@@ -149,7 +144,8 @@ class _AppViewState extends State<AppView> {
                           child: Text(
                             'Version $_appVersion',
                             style: TextStyles.bodyMedium.copyWith(
-                              color: context.uiColors.onSurface.withOpacity(0.8),
+                              color:
+                                  context.uiColors.onSurface.withOpacity(0.8),
                             ),
                           ),
                         ),
@@ -162,12 +158,15 @@ class _AppViewState extends State<AppView> {
                           print(customerInfo);
                           if (customerInfo != null && state.isAuthenticated) {
                             return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
-                                color: context.uiColors.primary.withOpacity(0.1),
+                                color:
+                                    context.uiColors.primary.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: context.uiColors.primary.withOpacity(0.3),
+                                  color:
+                                      context.uiColors.primary.withOpacity(0.3),
                                   width: 1,
                                 ),
                               ),
@@ -188,13 +187,15 @@ class _AppViewState extends State<AppView> {
                                   ),
                                   const SizedBox(width: 8),
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
                                         customerInfo.email,
                                         style: TextStyles.bodySmall.copyWith(
-                                          color: context.uiColors.onSurface.withOpacity(0.7),
+                                          color: context.uiColors.onSurface
+                                              .withOpacity(0.7),
                                         ),
                                       ),
                                     ],
@@ -354,7 +355,8 @@ class _MobileStaticChannelList extends StatelessWidget {
       arguments: {
         'channel': channels[index],
         'contentType': ContentType.television,
-        'contentCubit': context.read<ContentCubit>(), // Use existing cubit instance
+        'contentCubit':
+            context.read<ContentCubit>(), // Use existing cubit instance
       },
     );
   }
@@ -419,12 +421,12 @@ class _MobileChannelCard extends StatelessWidget {
                               : Container(color: context.uiColors.tvSurface)
                                   .animate()
                                   .shimmer(
-                                    colors: [
-                                      Colors.black,
-                                      context.uiColors.primary,
-                                      Colors.black,
-                                    ],
-                                  ),
+                                  colors: [
+                                    Colors.black,
+                                    context.uiColors.primary,
+                                    Colors.black,
+                                  ],
+                                ),
                     ),
                     Positioned(
                       bottom: 0,
@@ -445,7 +447,8 @@ class _MobileChannelCard extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 child: Text(
                   item.title,
                   style: TextStyles.bodySmallMedium,
@@ -489,7 +492,8 @@ class __TVStaticChannelListState extends State<_TVStaticChannelList> {
   @override
   void initState() {
     super.initState();
-    _cardFocusNodes = List.generate(widget.channels.length, (index) => FocusNode());
+    _cardFocusNodes =
+        List.generate(widget.channels.length, (index) => FocusNode());
 
     for (var node in _cardFocusNodes) {
       node.addListener(() => listener(node));
@@ -551,7 +555,8 @@ class __TVStaticChannelListState extends State<_TVStaticChannelList> {
       arguments: {
         'contentType': ContentType.television,
         'channel': widget.channels[cardIndex],
-        'contentCubit': context.read<ContentCubit>() // Use existing cubit instance
+        'contentCubit':
+            context.read<ContentCubit>() // Use existing cubit instance
       },
     );
   }
@@ -583,7 +588,9 @@ class __TVStaticChannelListState extends State<_TVStaticChannelList> {
                 decoration: BoxDecoration(
                   border: Border.all(
                     width: 2,
-                    color: hasFocus ? context.uiColors.primary : Colors.transparent,
+                    color: hasFocus
+                        ? context.uiColors.primary
+                        : Colors.transparent,
                   ),
                 ),
                 padding: const EdgeInsets.all(10),
@@ -596,15 +603,18 @@ class __TVStaticChannelListState extends State<_TVStaticChannelList> {
                         fit: BoxFit.fill,
                         width: double.infinity,
                         errorBuilder: (_, __, ___) => Image.asset(Assets.logo),
-                        loadingBuilder: (context, child, loadingProgress) => loadingProgress == null
-                            ? child
-                            : Container(color: AppColors.greyscale[500]).animate().shimmer(
-                                colors: [
-                                  Colors.black,
-                                  context.uiColors.primary,
-                                  Colors.black,
-                                ],
-                              ).fadeIn(),
+                        loadingBuilder: (context, child, loadingProgress) =>
+                            loadingProgress == null
+                                ? child
+                                : Container(color: AppColors.greyscale[500])
+                                    .animate()
+                                    .shimmer(
+                                    colors: [
+                                      Colors.black,
+                                      context.uiColors.primary,
+                                      Colors.black,
+                                    ],
+                                  ).fadeIn(),
                       ),
                     ),
                     const SizedBox(height: 8),

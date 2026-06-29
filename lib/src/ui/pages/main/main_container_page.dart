@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fndtv/src/ui/widgets/widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fndtv/src/bloc/content_cubit/content_cubit.dart';
 import 'package:fndtv/src/core/constants/fndtv_channels.dart';
@@ -11,9 +12,40 @@ import 'package:fndtv/src/ui/pages/radio/new_radio_page.dart';
 import 'package:fndtv/src/ui/pages/about/new_about_page.dart';
 import 'package:fndtv/src/ui/pages/settings/settings_page.dart';
 import 'package:fndtv/src/ui/widgets/fndtv_bottom_navigation_bar.dart';
-import 'package:fndtv/src/ui/widgets/radio/radio_mini_bar.dart';
 import 'package:app_localization/app_localization.dart';
 import 'package:ui_kit/ui_kit.dart';
+
+enum _MainTab {
+  home,
+  live,
+  radio,
+  about,
+}
+
+extension _MainTabX on _MainTab {
+  String title(BuildContext context) => switch (this) {
+        _MainTab.home => context.l.tabTitleHome,
+        _MainTab.live => context.l.tabTitleLive,
+        _MainTab.radio => context.l.tabTitleRadio,
+        _MainTab.about => context.l.tabTitleAbout,
+      };
+
+  String subtitle(BuildContext context) => switch (this) {
+        _MainTab.home => context.l.tabSubtitleHome,
+        _MainTab.live => context.l.tabSubtitleLive,
+        _MainTab.radio => context.l.tabSubtitleRadio,
+        _MainTab.about => '',
+      };
+
+  Widget buildPage(FndtvLanguage language) => switch (this) {
+        _MainTab.home => NewHomePage(language: language),
+        _MainTab.live => NewLivePage(language: language),
+        _MainTab.radio => NewRadioPage(language: language),
+        _MainTab.about => NewAboutPage(language: language),
+      };
+
+  bool get showsSettingsAction => this == _MainTab.about;
+}
 
 class MainContainerPage extends StatefulWidget {
   static const path = '/main';
@@ -26,6 +58,9 @@ class MainContainerPage extends StatefulWidget {
 }
 
 class _MainContainerPageState extends State<MainContainerPage> {
+  static const _appBarColor = Color(0xFFA83734);
+
+  final _tabs = _MainTab.values;
   int _currentIndex = 0;
   late PageController _pageController;
 
@@ -61,6 +96,8 @@ class _MainContainerPageState extends State<MainContainerPage> {
   }
 
   void _onTabTapped(int index) {
+    if (index == _currentIndex) return;
+
     _pageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 300),
@@ -70,33 +107,27 @@ class _MainContainerPageState extends State<MainContainerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final l = context.l;
-    final tabTitles = [l.tabTitleHome, l.tabTitleLive, l.tabTitleRadio, l.tabTitleAbout];
-    final tabSubtitles = [l.tabSubtitleHome, l.tabSubtitleLive, l.tabSubtitleRadio, ''];
     // Language drives both the UI locale and the channel-language filter; derive
     // it from the LocalizationCubit so a persisted locale stays in sync.
     final selectedLanguage = FndtvLanguage.fromLocaleCode(
       context.watch<LocalizationCubit>().state.locale.languageCode,
     );
-    final pages = [
-      NewHomePage(language: selectedLanguage),
-      NewLivePage(language: selectedLanguage),
-      NewRadioPage(language: selectedLanguage),
-      NewAboutPage(language: selectedLanguage),
-    ];
+    final currentTab = _tabs[_currentIndex];
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
-        statusBarColor: Color(0xFFA83734), // red strip (non-edge-to-edge fallback)
+        statusBarColor: _appBarColor, // red strip (non-edge-to-edge fallback)
         statusBarIconBrightness: Brightness.light, // white icons (Android)
         statusBarBrightness: Brightness.dark, // white icons (iOS)
       ),
-      child: Scaffold(
-      body: Column(
-        children: [
-          // App bar
-          Container(
-              color: const Color(0xFFA83734),
-              padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 12, 16, 8),
+      child: AppScaffold(
+        body: Column(
+          children: [
+            // App bar
+            Container(
+              color: _appBarColor,
+              padding: EdgeInsets.fromLTRB(
+                  16, MediaQuery.of(context).padding.top + 12, 16, 8),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -112,7 +143,7 @@ class _MainContainerPageState extends State<MainContainerPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          tabTitles[_currentIndex],
+                          currentTab.title(context),
                           style: GoogleFonts.sora(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
@@ -120,9 +151,9 @@ class _MainContainerPageState extends State<MainContainerPage> {
                             letterSpacing: 1.2,
                           ),
                         ),
-                        if (tabSubtitles[_currentIndex].isNotEmpty)
+                        if (currentTab.subtitle(context).isNotEmpty)
                           Text(
-                            tabSubtitles[_currentIndex],
+                            currentTab.subtitle(context),
                             style: GoogleFonts.sora(
                               fontSize: 10,
                               fontWeight: FontWeight.w400,
@@ -136,42 +167,36 @@ class _MainContainerPageState extends State<MainContainerPage> {
                   // channel-language filter.
                   _LanguageSelector(
                     selected: selectedLanguage,
-                    onChanged: (lang) =>
-                        context.read<LocalizationCubit>().setLocale(lang.localeCode),
+                    onChanged: (lang) => context
+                        .read<LocalizationCubit>()
+                        .setLocale(lang.localeCode),
                   ),
                   // Settings button on About tab
-                  if (_currentIndex == 3) ...[
+                  if (currentTab.showsSettingsAction) ...[
                     const SizedBox(width: 4),
                     IconButton(
-                      icon: const Icon(Icons.settings, color: Colors.white, size: 26),
+                      icon: const Icon(Icons.settings,
+                          color: Colors.white, size: 26),
                       padding: EdgeInsets.zero,
-                      onPressed: () => Navigator.of(context).pushNamed(SettingsPage.path),
+                      onPressed: () =>
+                          Navigator.of(context).pushNamed(SettingsPage.path),
                     ),
                   ],
                 ],
               ),
             ),
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              onPageChanged: _onPageChanged,
-              physics: const BouncingScrollPhysics(),
-              children: pages,
+            Expanded(
+              child: PageView.builder(
+                controller: _pageController,
+                onPageChanged: _onPageChanged,
+                physics: const BouncingScrollPhysics(),
+                itemCount: _tabs.length,
+                itemBuilder: (context, index) =>
+                    _tabs[index].buildPage(selectedLanguage),
+              ),
             ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Spotify-style persistent radio mini-player (hidden when idle)
-          const RadioMiniBar(),
-          FNDTVBottomNavigationBar(
-            currentIndex: _currentIndex,
-            onTap: _onTabTapped,
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -215,7 +240,8 @@ class _LanguageSelector extends StatelessWidget {
           padding: const EdgeInsets.all(2.5),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withValues(alpha: 0.85), width: 1.5),
+            border: Border.all(
+                color: Colors.white.withValues(alpha: 0.85), width: 1.5),
           ),
           child: CountryFlag.fromCountryCode(
             selected.countryCode,
@@ -335,13 +361,15 @@ class _LanguageRow extends StatelessWidget {
                     lang.endonym,
                     style: GoogleFonts.sora(
                       fontSize: 15,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight:
+                          isSelected ? FontWeight.w700 : FontWeight.w500,
                       color: isSelected ? colors.accent : colors.textPrimary,
                     ),
                   ),
                 ),
                 if (isSelected)
-                  Icon(Icons.check_circle_rounded, color: colors.accent, size: 22),
+                  Icon(Icons.check_circle_rounded,
+                      color: colors.accent, size: 22),
               ],
             ),
           ),

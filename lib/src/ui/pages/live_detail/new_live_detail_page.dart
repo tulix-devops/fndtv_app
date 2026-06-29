@@ -8,6 +8,7 @@ import 'package:app_localization/app_localization.dart';
 import 'package:fndtv/src/data/models/content/images_model.dart';
 import 'package:fndtv/src/data/models/content/live_model.dart';
 import 'package:fndtv/src/data/repositories/content/content_repository.dart';
+import 'package:fndtv/src/ui/widgets/channel/channel_tiles.dart';
 import 'package:ui_kit/ui_kit.dart';
 import 'package:video_player/video_player.dart';
 
@@ -35,6 +36,7 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
   @override
   void initState() {
     super.initState();
+    _focusNodes = List.generate(_programs.length, (_) => FocusNode());
     _fetchSchedule();
   }
 
@@ -88,10 +90,21 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
     }
   }
 
+  late List<FocusNode> _focusNodes;
+
+  @override
+  void dispose() {
+    for (final node in _focusNodes) {
+      node.dispose();
+    }
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.uiKitColors;
     final link = widget.channel.sources.getPreferredVideoSource() ?? '';
+    final isTv = context.isTv;
 
     return Scaffold(
       backgroundColor: colors.bgPrimary,
@@ -101,12 +114,14 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
           // Branded app bar — back + page name (left), crest logo (right)
           Container(
             color: const Color(0xFFA83734),
-            padding: EdgeInsets.fromLTRB(4, MediaQuery.of(context).padding.top + 8, 16, 10),
+            padding: EdgeInsets.fromLTRB(
+                4, MediaQuery.of(context).padding.top + 8, 16, 10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 26),
+                  icon: const Icon(Icons.arrow_back_rounded,
+                      color: Colors.white, size: 26),
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
                 Expanded(
@@ -146,55 +161,158 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
             ),
           ),
 
-          // Scrollable content below the app bar
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 12),
+            child: isTv
+                ? _buildTvContent(context, colors, link)
+                : _buildMobileContent(context, colors, link),
+          ),
+        ],
+      ),
+    );
+  }
 
-                // Inline mini-player
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: _InlineLivePlayer(url: link),
+  // ── Mobile layout ─────────────────────────────────────────────────────────
+  Widget _buildMobileContent(
+      BuildContext context, UiKitColors colors, String link) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: _InlineLivePlayer(url: link),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Text(
+                context.l.archive,
+                style: GoogleFonts.sora(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: colors.accent,
+                ),
               ),
-            ),
+              const Spacer(),
+              _ViewToggle(
+                isGrid: _isGrid,
+                onChanged: (v) => setState(() => _isGrid = v),
+                colors: colors,
+              ),
+              const SizedBox(width: 10),
+              _DateChip(
+                date: _selectedDate,
+                onTap: _pickDate,
+                colors: colors,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Expanded(child: _buildScheduleBody(colors)),
+      ],
+    );
+  }
 
-            const SizedBox(height: 16),
-
-            // Schedule controls: title + grid/list toggle + date chip
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
+  // ── TV layout: player + info (left) | schedule (right) ────────────────────
+  Widget _buildTvContent(
+      BuildContext context, UiKitColors colors, String link) {
+    return FocusTraversalGroup(
+      policy: ReadingOrderTraversalPolicy(),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left panel ── player + channel badge
+          SizedBox(
+            width: MediaQuery.of(context).size.width * 0.38,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 20, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: _InlineLivePlayer(url: link),
+                  ),
+                  const SizedBox(height: 20),
                   Text(
-                    context.l.archive,
+                    widget.channel.title,
                     style: GoogleFonts.sora(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: colors.accent,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: colors.textPrimary,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const Spacer(),
-                  _ViewToggle(
-                    isGrid: _isGrid,
-                    onChanged: (v) => setState(() => _isGrid = v),
-                    colors: colors,
-                  ),
-                  const SizedBox(width: 10),
-                  _DateChip(
-                    date: _selectedDate,
-                    onTap: _pickDate,
-                    colors: colors,
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: colors.accent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        context.l.badgeLive,
+                        style: GoogleFonts.sora(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: colors.accent,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+          ),
 
-                // DVR / EPG body (grid or list)
+          // Divider
+          Container(width: 1, color: colors.border.withValues(alpha: 0.5)),
+
+          // Right panel ── schedule
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                  child: Row(
+                    children: [
+                      Text(
+                        context.l.archive,
+                        style: GoogleFonts.sora(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: colors.accent,
+                        ),
+                      ),
+                      const Spacer(),
+                      _ViewToggle(
+                        isGrid: _isGrid,
+                        onChanged: (v) => setState(() => _isGrid = v),
+                        colors: colors,
+                      ),
+                      const SizedBox(width: 10),
+                      _DateChip(
+                        date: _selectedDate,
+                        onTap: _pickDate,
+                        colors: colors,
+                      ),
+                    ],
+                  ),
+                ),
                 Expanded(child: _buildScheduleBody(colors)),
               ],
             ),
@@ -226,7 +344,8 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
                 });
                 _fetchSchedule();
               },
-              child: Text(context.l.retry, style: TextStyle(color: colors.accent)),
+              child:
+                  Text(context.l.retry, style: TextStyle(color: colors.accent)),
             ),
           ],
         ),
@@ -252,17 +371,24 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
           childAspectRatio: 0.82,
         ),
         itemCount: _programs.length,
-        itemBuilder: (context, i) =>
-            _DvrGridCard(program: _programs[i], isCurrent: isCurrent(_programs[i])),
+        itemBuilder: (context, i) => _DvrGridCard(
+          program: _programs[i],
+          isCurrent: isCurrent(_programs[i]),
+          onTap: () => openLiveDetail(context, _programs[i]),
+        ),
       );
     }
+    _focusNodes = List.generate(_programs.length, (_) => FocusNode());
 
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       itemCount: _programs.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, i) =>
-          _DvrRow(program: _programs[i], isCurrent: isCurrent(_programs[i])),
+      itemBuilder: (context, i) => _DvrRow(
+        program: _programs[i],
+        isCurrent: isCurrent(_programs[i]),
+        onTap: () => openLiveDetail(context, _programs[i]),
+      ),
     );
   }
 
@@ -288,7 +414,8 @@ class _ViewToggle extends StatelessWidget {
   final ValueChanged<bool> onChanged;
   final UiKitColors colors;
 
-  const _ViewToggle({required this.isGrid, required this.onChanged, required this.colors});
+  const _ViewToggle(
+      {required this.isGrid, required this.onChanged, required this.colors});
 
   @override
   Widget build(BuildContext context) {
@@ -308,18 +435,22 @@ class _ViewToggle extends StatelessWidget {
   }
 
   Widget _seg(IconData icon, bool active, VoidCallback onTap, bool left) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: active ? colors.accent : Colors.transparent,
-          borderRadius: BorderRadius.horizontal(
-            left: left ? const Radius.circular(9) : Radius.zero,
-            right: left ? Radius.zero : const Radius.circular(9),
-          ),
+    final radius = BorderRadius.horizontal(
+      left: left ? const Radius.circular(9) : Radius.zero,
+      right: left ? Radius.zero : const Radius.circular(9),
+    );
+    return Material(
+      color: active ? colors.accent : Colors.transparent,
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        focusColor: colors.accent.withValues(alpha: 0.3),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          child: Icon(icon,
+              size: 18, color: active ? Colors.white : colors.accent),
         ),
-        child: Icon(icon, size: 18, color: active ? Colors.white : colors.accent),
       ),
     );
   }
@@ -334,32 +465,40 @@ class _DateChip extends StatelessWidget {
   final VoidCallback onTap;
   final UiKitColors colors;
 
-  const _DateChip({required this.date, required this.onTap, required this.colors});
+  const _DateChip(
+      {required this.date, required this.onTap, required this.colors});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: colors.accent, width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              DateFormat('MMM d').format(date),
-              style: GoogleFonts.sora(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: colors.accent,
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        focusColor: colors.accent.withValues(alpha: 0.2),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: colors.accent, width: 1),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                DateFormat('MMM d').format(date),
+                style: GoogleFonts.sora(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: colors.accent,
+                ),
               ),
-            ),
-            const SizedBox(width: 6),
-            Icon(Icons.calendar_today_rounded, size: 14, color: colors.accent),
-          ],
+              const SizedBox(width: 6),
+              Icon(Icons.calendar_today_rounded,
+                  size: 14, color: colors.accent),
+            ],
+          ),
         ),
       ),
     );
@@ -441,7 +580,8 @@ class _InlineLivePlayerState extends State<_InlineLivePlayer> {
         color: Colors.black,
         child: _failed
             ? const Center(
-                child: Icon(Icons.videocam_off_rounded, color: Colors.white54, size: 36),
+                child: Icon(Icons.videocam_off_rounded,
+                    color: Colors.white54, size: 36),
               )
             : (_chewie != null
                 ? Chewie(controller: _chewie!)
@@ -469,8 +609,14 @@ String _fmtTime(String? iso) {
 class _DvrRow extends StatelessWidget {
   final LiveModel program;
   final bool isCurrent;
+  final VoidCallback? onTap;
+  final FocusNode? focusNode;
 
-  const _DvrRow({required this.program, this.isCurrent = false});
+  const _DvrRow(
+      {required this.program,
+      this.isCurrent = false,
+      this.onTap,
+      this.focusNode});
 
   @override
   Widget build(BuildContext context) {
@@ -484,66 +630,82 @@ class _DvrRow extends StatelessWidget {
     final timeColor = isCurrent ? Colors.white : colors.accent;
     final range = end.isEmpty ? start : '$start - $end';
 
-    return Container(
-      height: 62,
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: isCurrent ? colors.accent : const Color(0xFFF6E3E3),
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          width: 1,
-          color: isCurrent ? colors.accent : const Color(0xFFE2B6B6),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Image
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: SizedBox(
-              width: 88,
-              height: 50,
-              child: hasThumb
-                  ? Image.network(
-                      thumb,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: colors.bgSurface,
-                        child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 22),
-                      ),
-                    )
-                  : Container(
-                      color: colors.bgSurface,
-                      child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 22),
+        focusNode: focusNode,
+        focusColor: Colors.white.withValues(alpha: 0.15),
+        onTap: onTap,
+        child: Builder(builder: (context) {
+          final isFocused = Focus.of(context).hasFocus ||
+              focusNode?.hasFocus == true; // for TV remote focus
+          return Container(
+            height: 62,
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: isFocused ? colors.accent : const Color(0xFFF6E3E3),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                width: 1,
+                color: isFocused ? colors.accent : const Color(0xFFE2B6B6),
+              ),
+            ),
+            child: Row(
+              children: [
+                // Image
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 88,
+                    height: 50,
+                    child: hasThumb
+                        ? Image.network(
+                            thumb,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: colors.bgSurface,
+                              child: Icon(Icons.live_tv_rounded,
+                                  color: colors.textMuted, size: 22),
+                            ),
+                          )
+                        : Container(
+                            color: colors.bgSurface,
+                            child: Icon(Icons.live_tv_rounded,
+                                color: colors.textMuted, size: 22),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // Title
+                Expanded(
+                  child: Text(
+                    program.title,
+                    style: GoogleFonts.sora(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                      color: titleColor,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // Time range
+                if (range.isNotEmpty)
+                  Text(
+                    range,
+                    style: GoogleFonts.sora(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: timeColor,
+                    ),
+                  ),
+              ],
             ),
-          ),
-          const SizedBox(width: 10),
-          // Title (secondary — trimmed to a single line)
-          Expanded(
-            child: Text(
-              program.title,
-              style: GoogleFonts.sora(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w500,
-                color: titleColor,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 10),
-          // Time range (primary — full range, prominent)
-          if (range.isNotEmpty)
-            Text(
-              range,
-              style: GoogleFonts.sora(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: timeColor,
-              ),
-            ),
-        ],
+          );
+        }),
       ),
     );
   }
@@ -556,8 +718,13 @@ class _DvrRow extends StatelessWidget {
 class _DvrGridCard extends StatelessWidget {
   final LiveModel program;
   final bool isCurrent;
+  final VoidCallback? onTap;
 
-  const _DvrGridCard({required this.program, this.isCurrent = false});
+  const _DvrGridCard({
+    required this.program,
+    this.isCurrent = false,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -571,63 +738,74 @@ class _DvrGridCard extends StatelessWidget {
     final titleColor = isCurrent ? Colors.white : colors.textPrimary;
     final timeColor = isCurrent ? Colors.white : colors.accent;
 
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: isCurrent ? colors.accent : const Color(0xFFF6E3E3),
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          width: 1,
-          color: isCurrent ? colors.accent : const Color(0xFFE2B6B6),
+        focusColor: Colors.white.withValues(alpha: 0.15),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isCurrent ? colors.accent : const Color(0xFFF6E3E3),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              width: 1,
+              color: isCurrent ? colors.accent : const Color(0xFFE2B6B6),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: hasThumb
+                      ? Image.network(
+                          thumb,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: colors.bgSurface,
+                            child: Icon(Icons.live_tv_rounded,
+                                color: colors.textMuted, size: 26),
+                          ),
+                        )
+                      : Container(
+                          color: colors.bgSurface,
+                          child: Icon(Icons.live_tv_rounded,
+                              color: colors.textMuted, size: 26),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (range.isNotEmpty)
+                Text(
+                  range,
+                  style: GoogleFonts.sora(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: timeColor,
+                  ),
+                ),
+              const SizedBox(height: 4),
+              Expanded(
+                child: Text(
+                  program.title,
+                  style: GoogleFonts.sora(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                    height: 1.25,
+                    color: titleColor,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: hasThumb
-                  ? Image.network(
-                      thumb,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: colors.bgSurface,
-                        child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 26),
-                      ),
-                    )
-                  : Container(
-                      color: colors.bgSurface,
-                      child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 26),
-                    ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (range.isNotEmpty)
-            Text(
-              range,
-              style: GoogleFonts.sora(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: timeColor,
-              ),
-            ),
-          const SizedBox(height: 4),
-          Expanded(
-            child: Text(
-              program.title,
-              style: GoogleFonts.sora(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w500,
-                height: 1.25,
-                color: titleColor,
-              ),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
       ),
     );
   }

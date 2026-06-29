@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:commons/commons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:app_localization/app_localization.dart';
@@ -47,9 +48,11 @@ class ContentError extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           TextButton(
-            onPressed: () =>
-                context.read<ContentCubit>().getContentForMultipleTypes([8, 10]),
-            child: Text(context.l.retry, style: TextStyle(color: colors.accent)),
+            onPressed: () => context
+                .read<ContentCubit>()
+                .getContentForMultipleTypes([8, 10]),
+            child:
+                Text(context.l.retry, style: TextStyle(color: colors.accent)),
           ),
         ],
       ),
@@ -96,7 +99,8 @@ class FndtvSectionHeader extends StatelessWidget {
           Container(
             width: 9,
             height: 9,
-            decoration: BoxDecoration(color: colors.accent, shape: BoxShape.circle),
+            decoration:
+                BoxDecoration(color: colors.accent, shape: BoxShape.circle),
           ),
           const SizedBox(width: 9),
           Text(
@@ -194,6 +198,7 @@ class StatusPill extends StatelessWidget {
 
 class LivePosterTile extends StatelessWidget {
   final LiveModel channel;
+
   /// Badge text; when null, falls back to the localized "LIVE" label.
   final String? badge;
 
@@ -226,13 +231,15 @@ class LivePosterTile extends StatelessWidget {
                   imageUrl,
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) => Center(
-                    child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 44),
+                    child: Icon(Icons.live_tv_rounded,
+                        color: colors.textMuted, size: 44),
                   ),
                 ),
                 Positioned(
                   top: 12,
                   left: 12,
-                  child: StatusPill(text: badge ?? context.l.badgeLive, icon: Icons.circle),
+                  child: StatusPill(
+                      text: badge ?? context.l.badgeLive, icon: Icons.circle),
                 ),
                 const Positioned(
                   bottom: 12,
@@ -252,58 +259,119 @@ class LivePosterTile extends StatelessWidget {
 // RADIO ROW CARD  (gold mic + equalizer; tap -> player)
 // ═══════════════════════════════════════════════════════════════════════════
 
-class RadioRowCard extends StatelessWidget {
+class RadioRowCard extends StatefulWidget {
   final LiveModel channel;
+  final FocusNode? focusNode;
+  final bool isSelected;
 
-  const RadioRowCard({super.key, required this.channel});
+  const RadioRowCard({
+    super.key,
+    required this.channel,
+    this.focusNode,
+    this.isSelected = false,
+  });
+
+  @override
+  State<RadioRowCard> createState() => _RadioRowCardState();
+}
+
+class _RadioRowCardState extends State<RadioRowCard> {
+  late final FocusNode _focusNode;
+  bool _hasFocus = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = widget.focusNode ?? FocusNode();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    // Only dispose if we own it (not passed in from outside).
+    if (widget.focusNode == null) _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() => setState(() => _hasFocus = _focusNode.hasFocus);
+
+  bool get _active => _hasFocus || widget.isSelected;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.uiKitColors;
 
-    return GestureDetector(
-      onTap: () => RadioPlayerService.instance.play(channel),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: colors.bgCard,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(width: 0.5, color: colors.border),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFE088),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.mic_rounded, color: Color(0xFF7A2A16), size: 24),
+    return Focus(
+      focusNode: _focusNode,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.enter ||
+                event.logicalKey == LogicalKeyboardKey.select ||
+                event.logicalKey == LogicalKeyboardKey.space)) {
+          RadioPlayerService.instance.play(widget.channel);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        onTap: () => RadioPlayerService.instance.play(widget.channel),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: colors.bgCard,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              width: _active ? 2.0 : 0.5,
+              color: _active ? colors.accent : colors.border,
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    channel.title,
-                    style: GoogleFonts.sora(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: colors.textPrimary,
+            boxShadow: _active
+                ? [
+                    BoxShadow(
+                      color: colors.accent.withValues(alpha: 0.35),
+                      blurRadius: 10,
+                      spreadRadius: 1,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  EqualizerBars(color: colors.accent, height: 14, bars: 5),
-                ],
+                  ]
+                : null,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFFE088),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.mic_rounded,
+                    color: Color(0xFF7A2A16), size: 24),
               ),
-            ),
-            const SizedBox(width: 12),
-            const RoundedPlayButton(size: 44),
-          ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.channel.title,
+                      style: GoogleFonts.sora(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: _active ? colors.accent : colors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    EqualizerBars(color: colors.accent, height: 14, bars: 5),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              const RoundedPlayButton(size: 44),
+            ],
+          ),
         ),
       ),
     );
@@ -358,7 +426,8 @@ class _EqualizerBarsState extends State<EqualizerBars>
                     (0.5 +
                         0.5 *
                             math.sin(
-                              _controller.value * 2 * math.pi + phase * math.pi * 2,
+                              _controller.value * 2 * math.pi +
+                                  phase * math.pi * 2,
                             ));
             return Container(
               margin: const EdgeInsets.symmetric(horizontal: 1.5),

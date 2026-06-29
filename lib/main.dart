@@ -25,7 +25,7 @@ Future<void> main() async {
   HttpOverrides.global = AppHttpOverrides();
 
   // await Firebase.initializeApp(
-  //   options: DefaultFirebaseOptions.currentPlatform,
+  //   options: DefaultFirebaseOptions.current  Platform,
   // );
 
   runApp(const App());
