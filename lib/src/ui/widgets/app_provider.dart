@@ -74,7 +74,7 @@ class AppBlocProvider extends StatelessWidget {
             return LocalizationCubit(
               getLocaleUseCase: GetLocaleUseCase(localizationRepository: repo),
               setLocaleUseCase: SetLocaleUseCase(localizationRepository: repo),
-            )..getLocale();
+            );
           },
         ),
         BlocProvider<VideoPlayerCubit>(

@@ -13,6 +13,7 @@ import 'package:fndtv/src/ui/pages/settings/settings_page.dart';
 import 'package:fndtv/src/ui/widgets/fndtv_bottom_navigation_bar.dart';
 import 'package:fndtv/src/ui/widgets/radio/radio_mini_bar.dart';
 import 'package:app_localization/app_localization.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 class MainContainerPage extends StatefulWidget {
   static const path = '/main';
@@ -180,67 +181,170 @@ class _MainContainerPageState extends State<MainContainerPage> {
 // LANGUAGE SELECTOR (app bar)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// App-bar language button — a clean circular globe that opens a branded
+/// bottom sheet listing the three languages.
 class _LanguageSelector extends StatelessWidget {
   final FndtvLanguage selected;
   final ValueChanged<FndtvLanguage> onChanged;
 
   const _LanguageSelector({required this.selected, required this.onChanged});
 
+  void _openSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: false,
+      builder: (sheetContext) => _LanguageSheet(
+        selected: selected,
+        onChanged: (lang) {
+          Navigator.of(sheetContext).pop();
+          if (lang != selected) onChanged(lang);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<FndtvLanguage>(
-      initialValue: selected,
-      onSelected: onChanged,
-      tooltip: context.l.selectLanguage,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      itemBuilder: (context) => FndtvLanguage.values.map((lang) {
-        final isSelected = lang == selected;
-        return PopupMenuItem<FndtvLanguage>(
-          value: lang,
-          child: Row(
-            children: [
-              CountryFlag.fromCountryCode(
-                lang.countryCode,
-                height: 18,
-                width: 26,
-                shape: const RoundedRectangle(3),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                lang.endonym,
-                style: GoogleFonts.sora(
-                  fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected ? const Color(0xFFA83734) : Colors.black87,
+    return Tooltip(
+      message: context.l.selectLanguage,
+      child: InkWell(
+        onTap: () => _openSheet(context),
+        customBorder: const CircleBorder(),
+        child: Container(
+          padding: const EdgeInsets.all(2.5),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.85), width: 1.5),
+          ),
+          child: CountryFlag.fromCountryCode(
+            selected.countryCode,
+            height: 32,
+            width: 32,
+            shape: const Circle(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet for picking the app language.
+class _LanguageSheet extends StatelessWidget {
+  final FndtvLanguage selected;
+  final ValueChanged<FndtvLanguage> onChanged;
+
+  const _LanguageSheet({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.uiKitColors;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: BoxDecoration(
+          color: colors.bgCard,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Grabber
+            Center(
+              child: Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colors.border,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              if (isSelected) ...[
-                const Spacer(),
-                const Icon(Icons.check, size: 16, color: Color(0xFFA83734)),
-              ],
-            ],
-          ),
-        );
-      }).toList(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CountryFlag.fromCountryCode(
-              selected.countryCode,
-              height: 18,
-              width: 26,
-              shape: const RoundedRectangle(3),
             ),
-            const Icon(Icons.arrow_drop_down, color: Colors.white, size: 20),
+            const SizedBox(height: 18),
+            Text(
+              context.l.selectLanguage,
+              style: GoogleFonts.sora(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: colors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 14),
+            for (final lang in FndtvLanguage.values)
+              _LanguageRow(
+                lang: lang,
+                isSelected: lang == selected,
+                colors: colors,
+                onTap: () => onChanged(lang),
+              ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LanguageRow extends StatelessWidget {
+  final FndtvLanguage lang;
+  final bool isSelected;
+  final UiKitColors colors;
+  final VoidCallback onTap;
+
+  const _LanguageRow({
+    required this.lang,
+    required this.isSelected,
+    required this.colors,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? colors.accent.withValues(alpha: 0.10)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isSelected ? colors.accent : colors.border,
+                width: isSelected ? 1.4 : 0.6,
+              ),
+            ),
+            child: Row(
+              children: [
+                CountryFlag.fromCountryCode(
+                  lang.countryCode,
+                  height: 24,
+                  width: 34,
+                  shape: const RoundedRectangle(4),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    lang.endonym,
+                    style: GoogleFonts.sora(
+                      fontSize: 15,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: isSelected ? colors.accent : colors.textPrimary,
+                    ),
+                  ),
+                ),
+                if (isSelected)
+                  Icon(Icons.check_circle_rounded, color: colors.accent, size: 22),
+              ],
+            ),
+          ),
         ),
       ),
     );

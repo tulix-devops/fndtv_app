@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fndtv/src/index.dart';
 import 'package:local_storage/local_storage.dart';
+import 'package:app_localization/app_localization.dart';
 import 'package:fndtv/src/ui/pages/main/main_container_page.dart';
 
 class SplashPage extends StatefulWidget {
@@ -48,6 +49,8 @@ class _SplashPageState extends State<SplashPage> {
 
   void _init() async {
     await context.read<LocalStorage>().init();
+    // Storage is ready — load the persisted UI locale (French by default).
+    context.read<LocalizationCubit>().getLocale();
     await context.read<AppCubit>().init();
 
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
