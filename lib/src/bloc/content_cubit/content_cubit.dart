@@ -16,7 +16,8 @@ class ContentCubit extends Cubit<ContentState> {
 
   final ContentRepository _contentDataSource;
 
-  ContentModelList? handleLiveList(ResponseModel<ContentModelList> responseModel) {
+  ContentModelList? handleLiveList(
+      ResponseModel<ContentModelList> responseModel) {
     return (switch (responseModel) {
       PaginatedModel<ContentModelList>() => responseModel.data,
       SuccessModel<ContentModelList>() => responseModel.data,
@@ -28,10 +29,12 @@ class ContentCubit extends Cubit<ContentState> {
     if (isClosed) return;
     emit(state.copyWith(status: Status.loading));
     try {
-      final result = await _contentDataSource.getContent(contentType: contentTypeId);
+      final result =
+          await _contentDataSource.getContent(contentType: contentTypeId);
       final contentList = handleLiveList(result);
 
-      final updatedContentMap = Map<String, ContentModelList?>.from(state.contentList ?? {});
+      final updatedContentMap =
+          Map<String, ContentModelList?>.from(state.contentList ?? {});
       updatedContentMap['$contentTypeId'] = contentList;
 
       emit(
@@ -57,29 +60,33 @@ class ContentCubit extends Cubit<ContentState> {
             final allVodItems = <LiveModel>[];
             final uniqueTaglines = <String>{};
             int currentPage = 1;
-            const maxPages = 5; // Limit to 5 pages max to avoid too many requests
-            
+            const maxPages =
+                5; // Limit to 5 pages max to avoid too many requests
+
             // Keep fetching pages until we have at least 3 unique taglines or reach max pages
             while (uniqueTaglines.length < 3 && currentPage <= maxPages) {
-              final result = await _contentDataSource.getContent(contentType: typeId, page: currentPage);
+              final result = await _contentDataSource.getContent(
+                  contentType: typeId, page: currentPage);
               final pageContent = handleLiveList(result);
-              
+              print('result $result');
+
               if (pageContent != null && pageContent.data.isNotEmpty) {
                 allVodItems.addAll(pageContent.data);
-                
+
                 // Track unique taglines
                 for (final item in pageContent.data) {
-                  if (item.details?.tagline != null && item.details!.tagline!.isNotEmpty) {
+                  if (item.details?.tagline != null &&
+                      item.details!.tagline!.isNotEmpty) {
                     uniqueTaglines.add(item.details!.tagline!);
                   }
                 }
-                
+
                 currentPage++;
               } else {
                 break; // No more data
               }
             }
-            
+
             // Create a combined content list with all fetched VOD items
             contentList['$typeId'] = ContentModelList(
               statusCode: 200,
@@ -88,7 +95,8 @@ class ContentCubit extends Cubit<ContentState> {
             );
           } else {
             // For other content types, fetch normally (page 1 only)
-            final result = await _contentDataSource.getContent(contentType: typeId);
+            final result =
+                await _contentDataSource.getContent(contentType: typeId);
             contentList['$typeId'] = handleLiveList(result);
           }
         }),
@@ -103,6 +111,7 @@ class ContentCubit extends Cubit<ContentState> {
     } catch (e) {
       emit(state.copyWith(status: Status.failure));
     }
+    print('Content list after fetching multiple types: $contentList');
   }
 
   void getDvrDataFromUrl({required String dvrUrl}) async {

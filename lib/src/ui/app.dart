@@ -14,6 +14,7 @@ import 'package:fndtv/src/index.dart';
 import 'package:fndtv/src/ui/app_view.dart';
 import 'package:fndtv/src/ui/pages/main/main_container_page.dart';
 import 'package:fndtv/src/ui/pages/live_detail/new_live_detail_page.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 
 import 'package:ui_kit/ui_kit.dart';
 import 'package:app_localization/app_localization.dart';
@@ -26,6 +27,24 @@ class App extends StatefulWidget {
 }
 
 class _AppState extends State<App> {
+  @override
+  void initState() {
+    super.initState();
+    initBackground();
+  }
+
+  void initBackground() async {
+    await JustAudioBackground.init(
+      androidNotificationChannelId: 'com.fndtv.videoplayer.channel.audio',
+      androidNotificationChannelName: 'FNDTV Radio',
+      androidNotificationChannelDescription: 'FNDTV radio playback controls',
+      androidNotificationIcon: 'drawable/ic_stat_fndtv',
+      notificationColor: const Color(0xFFA83734), // brand red accent/tint
+      androidNotificationOngoing: true,
+      androidShowNotificationBadge: true,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppProvider(
@@ -54,7 +73,8 @@ class _AppState extends State<App> {
             }
             return Shortcuts(
               shortcuts: <LogicalKeySet, Intent>{
-                LogicalKeySet(LogicalKeyboardKey.select): const ActivateIntent(),
+                LogicalKeySet(LogicalKeyboardKey.select):
+                    const ActivateIntent(),
               },
               child: MaterialApp(
                 debugShowCheckedModeBanner: false,
@@ -66,7 +86,8 @@ class _AppState extends State<App> {
                 themeMode: ThemeMode.dark,
                 darkTheme: _getTheme(context, Brightness.dark),
                 initialRoute: SplashPage.path,
-                onGenerateRoute: (settings) => onGenerateRoute(settings, context),
+                onGenerateRoute: (settings) =>
+                    onGenerateRoute(settings, context),
               ),
             );
           },
@@ -164,7 +185,6 @@ MaterialPageRoute<dynamic> onGenerateRoute(
       case VideoPlayerPage.path:
         final args = settings.arguments as Map<String, dynamic>;
         final LiveModel content = args['channel'] as LiveModel;
-        final contentCubit = args['contentCubit'] as ContentCubit;
         final contentType = args['contentType'] as ContentType;
 
         page = MultiRepositoryProvider(
@@ -177,7 +197,6 @@ MaterialPageRoute<dynamic> onGenerateRoute(
           ],
           child: MultiBlocProvider(
             providers: [
-              BlocProvider.value(value: contentCubit),
               BlocProvider<EpgCubit>(
                 create: (context) => EpgCubit(
                   contentDataSource: context.read<ContentRepository>(),
@@ -217,7 +236,8 @@ MaterialPageRoute<dynamic> onGenerateRoute(
             providers: [
               BlocProvider.value(value: contentCubit),
             ],
-            child: MobileChannelDetailPage(video: content, contentType: contentType),
+            child: MobileChannelDetailPage(
+                video: content, contentType: contentType),
           ),
         );
 
@@ -267,19 +287,53 @@ ThemeData _getTheme(BuildContext context, Brightness b) {
         ),
       },
     ),
-    scaffoldBackgroundColor: context.isTv ? context.uiColors.tvSurface : context.uiColors.surface,
+    scaffoldBackgroundColor:
+        context.isTv ? context.uiColors.tvSurface : context.uiColors.surface,
     textTheme: GoogleFonts.soraTextTheme().copyWith(
-      displayLarge: GoogleFonts.sora(fontSize: 48, fontWeight: FontWeight.w800, color: context.uiKitColors.textPrimary),
-      displayMedium: GoogleFonts.sora(fontSize: 36, fontWeight: FontWeight.w800, color: context.uiKitColors.textPrimary),
-      headlineLarge: GoogleFonts.sora(fontSize: 28, fontWeight: FontWeight.w800, color: context.uiKitColors.textPrimary),
-      headlineMedium: GoogleFonts.sora(fontSize: 22, fontWeight: FontWeight.w700, color: context.uiKitColors.textPrimary),
-      titleLarge: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700, color: context.uiKitColors.textPrimary),
-      titleMedium: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w600, color: context.uiKitColors.textPrimary),
-      titleSmall: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w600, color: context.uiKitColors.textPrimary),
-      bodyLarge: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w400, color: context.uiKitColors.textPrimary),
-      bodyMedium: GoogleFonts.sora(fontSize: 13, fontWeight: FontWeight.w400, color: context.uiKitColors.textMuted),
-      labelLarge: GoogleFonts.sora(fontSize: 12, fontWeight: FontWeight.w600, color: context.uiKitColors.textPrimary),
-      labelSmall: GoogleFonts.sora(fontSize: 10, fontWeight: FontWeight.w500, color: context.uiKitColors.textHint),
+      displayLarge: GoogleFonts.sora(
+          fontSize: 48,
+          fontWeight: FontWeight.w800,
+          color: context.uiKitColors.textPrimary),
+      displayMedium: GoogleFonts.sora(
+          fontSize: 36,
+          fontWeight: FontWeight.w800,
+          color: context.uiKitColors.textPrimary),
+      headlineLarge: GoogleFonts.sora(
+          fontSize: 28,
+          fontWeight: FontWeight.w800,
+          color: context.uiKitColors.textPrimary),
+      headlineMedium: GoogleFonts.sora(
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+          color: context.uiKitColors.textPrimary),
+      titleLarge: GoogleFonts.sora(
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          color: context.uiKitColors.textPrimary),
+      titleMedium: GoogleFonts.sora(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: context.uiKitColors.textPrimary),
+      titleSmall: GoogleFonts.sora(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: context.uiKitColors.textPrimary),
+      bodyLarge: GoogleFonts.sora(
+          fontSize: 15,
+          fontWeight: FontWeight.w400,
+          color: context.uiKitColors.textPrimary),
+      bodyMedium: GoogleFonts.sora(
+          fontSize: 13,
+          fontWeight: FontWeight.w400,
+          color: context.uiKitColors.textMuted),
+      labelLarge: GoogleFonts.sora(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: context.uiKitColors.textPrimary),
+      labelSmall: GoogleFonts.sora(
+          fontSize: 10,
+          fontWeight: FontWeight.w500,
+          color: context.uiKitColors.textHint),
     ),
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: context.uiColors.onSecondary,

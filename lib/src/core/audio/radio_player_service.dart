@@ -30,7 +30,8 @@ class RadioPlayerService {
 
   /// The channel currently loaded into the player (null = nothing playing).
   /// Drives the in-app mini-player bar's visibility.
-  final ValueNotifier<LiveModel?> currentChannel = ValueNotifier<LiveModel?>(null);
+  final ValueNotifier<LiveModel?> currentChannel =
+      ValueNotifier<LiveModel?>(null);
 
   Stream<PlayerState> get playerStateStream => _player.playerStateStream;
   bool get isPlaying => _player.playing;
@@ -40,6 +41,7 @@ class RadioPlayerService {
   Future<void> play(LiveModel channel) async {
     final s = channel.sources;
     final url = s.getPreferredVideoSource() ?? '';
+    print('OEEEE $url');
 
     // Dump everything we know about this channel before we try to play it.
     logger.i('[Radio] ▶ play request: "${channel.title}" '
@@ -86,8 +88,10 @@ class RadioPlayerService {
           '${duration?.toString() ?? 'live/unknown'}) → play()');
       await _player.play();
     } catch (err, st) {
-      logger.e('[Radio] failed to load "${channel.title}" '
-          '(url=$url): $err', stacktrace: st);
+      logger.e(
+          '[Radio] failed to load "${channel.title}" '
+          '(url=$url): $err',
+          stacktrace: st);
       currentChannel.value = null;
     }
   }

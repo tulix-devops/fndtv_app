@@ -93,11 +93,13 @@ class _LiveFullscreenState extends State<LiveFullscreen> {
   }
 
   Widget _buildControls() {
-    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
-    
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+
     return Stack(
       children: [
-        if (context.read<VideoPlayerCubit>().state.isVisible) const BlackBackground(),
+        if (context.read<VideoPlayerCubit>().state.isVisible)
+          const BlackBackground(),
         if (widget.showBackButton)
           Positioned(
             left: 60,
@@ -116,7 +118,8 @@ class _LiveFullscreenState extends State<LiveFullscreen> {
               focusNode: dvrFocus,
               onKeyEvent: (node, event) {
                 if (event is KeyDownEvent) {
-                  if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.select) {
+                  if (event.logicalKey == LogicalKeyboardKey.enter ||
+                      event.logicalKey == LogicalKeyboardKey.select) {
                     _openDvr();
                     return KeyEventResult.handled;
                   }
@@ -129,12 +132,17 @@ class _LiveFullscreenState extends State<LiveFullscreen> {
                   return InkWell(
                     onTap: _openDvr,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        color: hasFocus ? context.uiColors.primary : Colors.black.withOpacity(0.5),
+                        color: hasFocus
+                            ? context.uiColors.primary
+                            : Colors.black.withOpacity(0.5),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: hasFocus ? context.uiColors.onSurface : Colors.transparent,
+                          color: hasFocus
+                              ? context.uiColors.onSurface
+                              : Colors.transparent,
                           width: 2,
                         ),
                       ),
@@ -171,7 +179,9 @@ class _LiveFullscreenState extends State<LiveFullscreen> {
               Flexible(
                 child: VideoButton(
                   onPressed: (_) => _togglePlayPause(),
-                  icon: widget.controller.value.isPlaying ? Assets.videoPause : Assets.videoPlay,
+                  icon: widget.controller.value.isPlaying
+                      ? Assets.videoPause
+                      : Assets.videoPlay,
                   focusNode: playPauseFocus,
                 ),
               ),
@@ -193,7 +203,6 @@ class _LiveFullscreenState extends State<LiveFullscreen> {
       ],
     );
   }
-
 
   @override
   Widget build(BuildContext context) {

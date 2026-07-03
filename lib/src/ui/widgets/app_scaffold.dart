@@ -54,7 +54,8 @@ class _AppScaffoldState extends State<AppScaffold> {
   void navigationListener() {
     if (mounted) {
       setState(() {
-        hasFocus = navigationFocus.hasFocus || navigationFocus.descendants.any((element) => element.hasFocus);
+        hasFocus = navigationFocus.hasFocus ||
+            navigationFocus.descendants.any((element) => element.hasFocus);
       });
     }
   }
@@ -82,7 +83,17 @@ class _AppScaffoldState extends State<AppScaffold> {
               context.pop();
             }
           });
-
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
+            widget.hasNavbar) {
+          Future.delayed(const Duration(milliseconds: 200), () {
+            if (!mounted) return;
+            setState(() {
+              hasFocus = true;
+              navigationFocus.requestFocus();
+            });
+          });
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
@@ -153,7 +164,9 @@ class _AppScaffoldState extends State<AppScaffold> {
                                 focusNode: navigationFocus,
                                 onPressed: (s) {
                                   if (context.canPop()) {
-                                    context.read<AppCubit>().changeTab(s, canPop: true);
+                                    context
+                                        .read<AppCubit>()
+                                        .changeTab(s, canPop: true);
                                     context.pop();
                                   } else {
                                     context.read<AppCubit>().changeTab(s);
@@ -165,6 +178,7 @@ class _AppScaffoldState extends State<AppScaffold> {
                           ))
                     : Focus(
                         key: const ValueKey('EmptyFocusPlaceholder'),
+                        skipTraversal: true,
                         onFocusChange: (value) {
                           if (value) {
                             navigationFocus.requestFocus();
@@ -202,17 +216,10 @@ class _AppScaffoldState extends State<AppScaffold> {
                       },
                     ))
               : null,
-          backgroundColor: context.uiColors.surface,
+          backgroundColor: widget.color,
           extendBody: true,
           body: context.isTv
-              ? SafeArea(
-                  minimum: const EdgeInsets.all(10),
-                  child: Container(
-                      decoration: const BoxDecoration(
-                        gradient: AppColors.backgroundGradient,
-                      ),
-                      child: body),
-                )
+              ? body
               : SafeArea(
                   top: !_isLandscape,
                   bottom: false,

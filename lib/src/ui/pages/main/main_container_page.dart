@@ -1,7 +1,10 @@
-﻿import 'package:country_flags/country_flags.dart';
+﻿import 'package:commons/commons.dart';
+import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fndtv/src/ui/widgets/fndtv_bottom_navigation_bar.dart';
+import 'package:fndtv/src/ui/widgets/radio/radio_mini_bar.dart';
 import 'package:fndtv/src/ui/widgets/widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fndtv/src/bloc/content_cubit/content_cubit.dart';
@@ -11,7 +14,6 @@ import 'package:fndtv/src/ui/pages/live/new_live_page.dart';
 import 'package:fndtv/src/ui/pages/radio/new_radio_page.dart';
 import 'package:fndtv/src/ui/pages/about/new_about_page.dart';
 import 'package:fndtv/src/ui/pages/settings/settings_page.dart';
-import 'package:fndtv/src/ui/widgets/fndtv_bottom_navigation_bar.dart';
 import 'package:app_localization/app_localization.dart';
 import 'package:ui_kit/ui_kit.dart';
 
@@ -97,11 +99,97 @@ class _MainContainerPageState extends State<MainContainerPage> {
 
   void _onTabTapped(int index) {
     if (index == _currentIndex) return;
-
     _pageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
+    );
+  }
+
+  Widget _buildBody(
+    BuildContext context,
+    _MainTab currentTab,
+    FndtvLanguage selectedLanguage,
+  ) {
+    return Column(
+      children: [
+        // App bar
+        if (!context.isTv)
+          Container(
+            color: _appBarColor,
+            padding: EdgeInsets.fromLTRB(
+                16, MediaQuery.of(context).padding.top + 12, 16, 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Image.asset(
+                  'assets/img/main_logo_transparent.png',
+                  height: 72,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        currentTab.title(context),
+                        style: GoogleFonts.sora(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      if (currentTab.subtitle(context).isNotEmpty)
+                        Text(
+                          currentTab.subtitle(context),
+                          style: GoogleFonts.sora(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w400,
+                            color: Colors.white70,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // Language selector — switches both the UI locale and the
+                // channel-language filter.
+                _LanguageSelector(
+                  selected: selectedLanguage,
+                  onChanged: (lang) => context
+                      .read<LocalizationCubit>()
+                      .setLocale(lang.localeCode),
+                ),
+                // Settings button on About tab
+                if (currentTab.showsSettingsAction) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(Icons.settings,
+                        color: Colors.white, size: 26),
+                    padding: EdgeInsets.zero,
+                    onPressed: () =>
+                        Navigator.of(context).pushNamed(SettingsPage.path),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        Expanded(
+          child: PageView.builder(
+            scrollDirection: context.isTv ? Axis.vertical : Axis.horizontal,
+            controller: _pageController,
+            onPageChanged: _onPageChanged,
+            physics: const BouncingScrollPhysics(),
+            itemCount: _tabs.length,
+            itemBuilder: (context, index) => Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: _tabs[index].buildPage(selectedLanguage),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -115,90 +203,39 @@ class _MainContainerPageState extends State<MainContainerPage> {
     final currentTab = _tabs[_currentIndex];
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: _appBarColor, // red strip (non-edge-to-edge fallback)
-        statusBarIconBrightness: Brightness.light, // white icons (Android)
-        statusBarBrightness: Brightness.dark, // white icons (iOS)
-      ),
-      child: AppScaffold(
-        body: Column(
-          children: [
-            // App bar
-            Container(
-              color: _appBarColor,
-              padding: EdgeInsets.fromLTRB(
-                  16, MediaQuery.of(context).padding.top + 12, 16, 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Image.asset(
-                    'assets/img/main_logo_transparent.png',
-                    height: 72,
-                    fit: BoxFit.contain,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          currentTab.title(context),
-                          style: GoogleFonts.sora(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        if (currentTab.subtitle(context).isNotEmpty)
-                          Text(
-                            currentTab.subtitle(context),
-                            style: GoogleFonts.sora(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w400,
-                              color: Colors.white70,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  // Language selector — switches both the UI locale and the
-                  // channel-language filter.
-                  _LanguageSelector(
-                    selected: selectedLanguage,
-                    onChanged: (lang) => context
-                        .read<LocalizationCubit>()
-                        .setLocale(lang.localeCode),
-                  ),
-                  // Settings button on About tab
-                  if (currentTab.showsSettingsAction) ...[
-                    const SizedBox(width: 4),
-                    IconButton(
-                      icon: const Icon(Icons.settings,
-                          color: Colors.white, size: 26),
-                      padding: EdgeInsets.zero,
-                      onPressed: () =>
-                          Navigator.of(context).pushNamed(SettingsPage.path),
+        value: const SystemUiOverlayStyle(
+          statusBarColor: _appBarColor, // red strip (non-edge-to-edge fallback)
+          statusBarIconBrightness: Brightness.light, // white icons (Android)
+          statusBarBrightness: Brightness.dark, // white icons (iOS)
+        ),
+        child: context.isTv
+            ? AppScaffold(
+                color: context.uiKitColors.bgPrimary,
+                currentNavIndex: _currentIndex,
+                onNavChanged: _onTabTapped,
+                navigationItems: [
+                  (label: _tabs[0].title(context), icon: Assets.homeIcon),
+                  (label: _tabs[1].title(context), icon: Assets.tvShowIcon),
+                  (label: _tabs[2].title(context), icon: Assets.podcastIcon),
+                  (label: _tabs[3].title(context), icon: Assets.profile),
+                ],
+                body: _buildBody(context, currentTab, selectedLanguage),
+                hasNavbar: true,
+              )
+            : Scaffold(
+                body: _buildBody(context, currentTab, selectedLanguage),
+                bottomNavigationBar: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Spotify-style persistent radio mini-player (hidden when idle)
+                    const RadioMiniBar(),
+                    FNDTVBottomNavigationBar(
+                      currentIndex: _currentIndex,
+                      onTap: _onTabTapped,
                     ),
                   ],
-                ],
-              ),
-            ),
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                onPageChanged: _onPageChanged,
-                physics: const BouncingScrollPhysics(),
-                itemCount: _tabs.length,
-                itemBuilder: (context, index) =>
-                    _tabs[index].buildPage(selectedLanguage),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+                ),
+              ));
   }
 }
 

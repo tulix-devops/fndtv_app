@@ -5,7 +5,8 @@ import 'package:fndtv/src/ui/widgets/widgets.dart';
 import 'package:flutter/services.dart';
 
 class VideoPlayerPage extends StatefulWidget {
-  const VideoPlayerPage({super.key, required this.video, required this.contentType});
+  const VideoPlayerPage(
+      {super.key, required this.video, required this.contentType});
 
   final LiveModel video;
   final ContentType contentType;
@@ -48,7 +49,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   @override
   Widget build(BuildContext context) {
     String link = widget.video.sources.getPreferredVideoSource() ?? '';
-    print('this is the link ${link}');
+    print('this is the link $link');
 
     return Scaffold(
         body: widget.contentType == ContentType.radio

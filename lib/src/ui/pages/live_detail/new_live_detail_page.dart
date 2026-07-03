@@ -75,16 +75,17 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
       setState(() {
         if (data != null) {
           _programs = data.scheduleItems;
-          _loading = false;
         } else {
           _error = true;
-          _loading = false;
         }
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _error = true;
+      });
+    } finally {
+      setState(() {
         _loading = false;
       });
     }

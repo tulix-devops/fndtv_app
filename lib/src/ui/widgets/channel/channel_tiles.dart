@@ -62,6 +62,7 @@ class ContentError extends StatelessWidget {
 
 /// Opens a channel directly in the full-screen player.
 void openChannel(BuildContext context, LiveModel video, ContentType type) {
+  print('Opening channel: $video');
   Navigator.of(context).pushNamed(
     VideoPlayerPage.path,
     arguments: {
@@ -73,7 +74,16 @@ void openChannel(BuildContext context, LiveModel video, ContentType type) {
 }
 
 /// Opens a live channel's detail page (mini-player + DVR/EPG schedule).
-void openLiveDetail(BuildContext context, LiveModel channel) {
+void openLiveDetail(BuildContext context, LiveModel channel,
+    {ContentType contentType = ContentType.television}) {
+  if (context.isTv) {
+    Navigator.of(context).pushNamed(
+      VideoPlayerPage.path,
+      arguments: {'channel': channel, 'contentType': contentType},
+    );
+    return;
+  }
+  print('Opening live detail for channel: ${channel.sources}');
   Navigator.of(context).pushNamed(
     NewLiveDetailPage.path,
     arguments: {'channel': channel},

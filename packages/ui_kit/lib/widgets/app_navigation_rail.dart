@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:ui_kit/ui_kit.dart';
 
 class AppNavigationRail extends StatefulWidget {
-  AppNavigationRail({
+  const AppNavigationRail({
     super.key,
     required ValueChanged<dynamic> onPressed,
     required this.currentTab,
@@ -15,7 +15,7 @@ class AppNavigationRail extends StatefulWidget {
         currentIndex = null,
         isDynamic = false;
 
-  AppNavigationRail.dynamic({
+  const AppNavigationRail.dynamic({
     super.key,
     required ValueChanged<int> onPressed,
     required this.currentIndex,
@@ -50,15 +50,16 @@ class AppNavigationRail extends StatefulWidget {
 }
 
 class _AppNavigationRailState extends State<AppNavigationRail> {
-  late final List<({String label, String icon, BottomBarTab value})> _buttons = [
-    (label: 'Television', icon: Assets.homeIcon, value: BottomBarTab.television),
-    (label: 'Television Languages', icon: Assets.tvShowIcon, value: BottomBarTab.televisionLan),
+  late final List<({String label, String icon, BottomBarTab value})> _buttons =
+      [
+    (label: 'Home', icon: Assets.homeIcon, value: BottomBarTab.television),
+    (label: 'Live', icon: Assets.tvShowIcon, value: BottomBarTab.televisionLan),
     (label: 'Radio', icon: Assets.podcastIcon, value: BottomBarTab.radio),
-    (label: 'DVR', icon: Assets.tvShowIcon, value: BottomBarTab.dvr),
-    (label: 'Profile', icon: Assets.profile, value: BottomBarTab.profile),
+    (label: 'About', icon: Assets.profile, value: BottomBarTab.profile),
   ];
 
-  int get _itemCount => widget.isDynamic ? (widget.items?.length ?? 0) : _buttons.length;
+  int get _itemCount =>
+      widget.isDynamic ? (widget.items?.length ?? 0) : _buttons.length;
 
   FocusNode _getFocus(int index, int length) {
     return FocusNode(
@@ -112,7 +113,9 @@ class _AppNavigationRailState extends State<AppNavigationRail> {
             focusNode: widget.focusNode,
             onFocusChange: (value) {
               if (value) {
-                final currentIdx = widget.isDynamic ? (widget.currentIndex ?? 0) : (widget.currentTab?.index ?? 0);
+                final currentIdx = widget.isDynamic
+                    ? (widget.currentIndex ?? 0)
+                    : (widget.currentTab?.index ?? 0);
                 if (currentIdx < list.length) {
                   list[currentIdx].requestFocus();
                 }
@@ -122,7 +125,9 @@ class _AppNavigationRailState extends State<AppNavigationRail> {
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
-                children: widget.isDynamic ? _buildDynamicItems() : _buildStaticItems()),
+                children: widget.isDynamic
+                    ? _buildDynamicItems()
+                    : _buildStaticItems()),
           ),
         ],
       ),
@@ -155,13 +160,20 @@ class _AppNavigationRailState extends State<AppNavigationRail> {
                           height: 15,
                           width: 15,
                           color: AppColors.greyscale[500],
-                          gradient: i == widget.currentIndex ? context.uiColors.primaryGradient : null,
+                          gradient: i == widget.currentIndex
+                              ? context.uiColors.primaryGradient
+                              : null,
                         ),
                       ),
-                      AppText(
-                        style: TextStyles.bodySmallBold,
-                        text: items[i].label,
-                        gradient: i == widget.currentIndex ? context.uiColors.primaryGradient : null,
+                      Flexible(
+                        child: AppText(
+                          style: TextStyles.bodySmallBold
+                              .copyWith(overflow: TextOverflow.ellipsis),
+                          text: items[i].label,
+                          gradient: i == widget.currentIndex
+                              ? context.uiColors.primaryGradient
+                              : null,
+                        ),
                       ),
                     ],
                   ),
@@ -184,7 +196,8 @@ class _AppNavigationRailState extends State<AppNavigationRail> {
               focusNode: list[index],
               borderRadius: const BorderRadius.all(Radius.circular(45)),
               onTap: () {
-                if (button.value == widget.currentTab && Navigator.canPop(context)) {
+                if (button.value == widget.currentTab &&
+                    Navigator.canPop(context)) {
                   Navigator.pop(context);
                 }
                 if (button.value != widget.currentTab) {
@@ -209,10 +222,13 @@ class _AppNavigationRailState extends State<AppNavigationRail> {
                           gradient: _getSelectedColor(button.value),
                         ),
                       ),
-                      AppText(
-                        style: TextStyles.bodySmallBold,
-                        text: button.label,
-                        gradient: _getSelectedColor(button.value),
+                      Flexible(
+                        child: AppText(
+                          style: TextStyles.bodySmallBold
+                              .copyWith(overflow: TextOverflow.ellipsis),
+                          text: button.label,
+                          gradient: _getSelectedColor(button.value),
+                        ),
                       )
                     ],
                   ),

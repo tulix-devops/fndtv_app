@@ -60,7 +60,8 @@ class VideoPlayerCubit extends Cubit<VideoPlayerState> {
   }
 
   void muteVideo() {
-    double newCurrentVolume = !state.isMuted ? 0.0 : state.videoVolume.previousVolume;
+    double newCurrentVolume =
+        !state.isMuted ? 0.0 : state.videoVolume.previousVolume;
     emit(
       state.copyWith(
         isMuted: !state.isMuted,
@@ -82,7 +83,12 @@ class VideoPlayerCubit extends Cubit<VideoPlayerState> {
     emit(state.copyWith(videoIsRewindSeeking: status));
   }
 
-  void handleVisibility() {
+  void handleVisibility({bool forceVisible = false}) {
+    if (forceVisible) {
+      _visibilityTimer?.cancel();
+      emit(state.copyWith(isVisible: true));
+      return;
+    }
     _visibilityTimer?.cancel();
 
     emit(state.copyWith(isVisible: true));

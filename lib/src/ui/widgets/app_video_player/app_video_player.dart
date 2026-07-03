@@ -11,8 +11,6 @@ import 'package:ui_kit/ui_kit.dart';
 import 'package:fndtv/src/ui/widgets/app_video_player/screens/live_fullscreen.dart';
 import 'package:fndtv/src/ui/widgets/app_video_player/screens/vod_fullscreen.dart';
 import 'package:video_player/video_player.dart';
-import 'package:chewie/chewie.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 
 part 'video_button.dart';
 part 'video_controls.dart';
@@ -41,21 +39,20 @@ class AppVideoPlayer extends StatefulWidget {
 
 class _AppVideoPlayerState extends State<AppVideoPlayer> {
   VideoPlayerController? _videoPlayerController;
-  ChewieController? _chewieController;
 
   bool isLive = true;
 
   final ValueNotifier<bool> _isLoading = ValueNotifier<bool>(true);
-  bool _wakelockEnabled = false;
 
   @override
   void initState() {
     super.initState();
-    WakelockPlus.enable();
     print(widget.video.sources);
     context.read<VideoPlayerCubit>().reset();
     isLive = widget.isLive;
-    _initializePlayer(widget.link);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _initializePlayer(widget.link);
+    });
   }
 
   void _changeVideoType() {
@@ -66,45 +63,26 @@ class _AppVideoPlayerState extends State<AppVideoPlayer> {
   void _initializePlayer(String link) {
     _isLoading.value = true;
 
-    _videoPlayerController = VideoPlayerController.networkUrl(
+    final controller = VideoPlayerController.networkUrl(
       Uri.parse(link),
       formatHint: VideoFormat.hls,
-    )..initialize().then((_) {
-        setState(() {});
-        _videoPlayerController?.setLooping(false);
-        _videoPlayerController?.setVolume(1.0);
-        _videoPlayerController?.setPlaybackSpeed(1.0);
-
-        if (_videoPlayerController!.value.isInitialized) {
-          _isLoading.value = false;
-          _videoPlayerController?.play();
-          
-          // Initialize Chewie controller for inline player
-          if (!widget.showBackButton) {
-            _chewieController = ChewieController(
-              videoPlayerController: _videoPlayerController!,
-              autoPlay: true,
-              looping: false,
-              allowFullScreen: false,
-              allowMuting: true,
-              showControls: true,
-              materialProgressColors: ChewieProgressColors(
-                playedColor: const Color(0xFFFFE088),
-                handleColor: const Color(0xFFFFE088),
-                backgroundColor: Colors.grey,
-                bufferedColor: Colors.grey.withOpacity(0.5),
-              ),
-              placeholder: Container(
-                color: Colors.black,
-              ),
-              autoInitialize: true,
-            );
-            setState(() {});
-          }
-        }
-      });
-
+    );
+    _videoPlayerController = controller;
     _addPlayerEventListeners();
+
+    controller.initialize().then((_) {
+      if (!mounted || _videoPlayerController != controller) return;
+      setState(() {});
+      controller.setLooping(false);
+      controller.setVolume(1.0);
+      controller.setPlaybackSpeed(1.0);
+      controller.play();
+    }).catchError((Object error) {
+      debugPrint('Video player initialization error: $error');
+      if (!mounted || _videoPlayerController != controller) return;
+      _isLoading.value = false;
+      setState(() {});
+    });
   }
 
   void _handleBuffering() {
@@ -141,16 +119,7 @@ class _AppVideoPlayerState extends State<AppVideoPlayer> {
   @override
   void dispose() {
     _isLoading.dispose();
-    _chewieController?.dispose();
-    WakelockPlus.disable();
     removeListeners();
-    // Ensure wakelock is disabled when leaving the player
-    try {
-      if (_wakelockEnabled) {
-        WakelockPlus.disable();
-        _wakelockEnabled = false;
-      }
-    } catch (_) {}
 
     _videoPlayerController?.dispose();
     super.dispose();
@@ -162,22 +131,14 @@ class _AppVideoPlayerState extends State<AppVideoPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    if (_videoPlayerController == null || !_videoPlayerController!.value.isInitialized) {
+    if (_videoPlayerController == null ||
+        !_videoPlayerController!.value.isInitialized) {
       return Center(
         child: CircularProgressIndicator(color: context.uiColors.primary),
       );
     }
 
     // Use Chewie for inline player (Home screen)
-    if (!widget.showBackButton && _chewieController != null) {
-      return PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (res, _) async {},
-        child: Chewie(
-          controller: _chewieController!,
-        ),
-      );
-    }
 
     // Use custom controls for fullscreen player
     return PopScope(
@@ -287,19 +248,12 @@ class _CustomPlayerControlState extends State<_CustomPlayerControl> {
                   opacity: state.isVisible ? 1.0 : 0.0,
                   curve: Curves.ease,
                   duration: const Duration(milliseconds: 300),
-                  child: widget.isLive
-                      ? LiveFullscreen(
-                          controller: widget.controller,
-                          changeVideoType: widget.updateVideoType,
-                          updateVideoController: widget.updateVideoController,
-                          video: widget.video,
-                          showBackButton: widget.showBackButton,
-                        )
-                      : VodFullScreen(
-                          controller: widget.controller,
-                          updateVideoController: widget.updateVideoController,
-                          contentType: widget.contentType,
-                        ),
+                  child: VodFullScreen(
+                    controller: widget.controller,
+                    updateVideoController: widget.updateVideoController,
+                    contentType: widget.contentType,
+                    video: widget.video,
+                  ),
                 ),
               ),
             ),

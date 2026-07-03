@@ -1,5 +1,6 @@
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:app_localization/app_localization.dart';
 import 'package:fndtv/src/core/constants/fndtv_channels.dart';
@@ -21,12 +22,67 @@ class NewAboutPage extends StatelessWidget {
         'https://www.paypal.com/donate/?hosted_button_id=GXRAG3GWKXDDQ',
   };
 
+  void _openSheet(BuildContext context) {
+    showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.white,
+        builder: (context) {
+          return Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              for (final (index, value) in FndtvLanguage.values.indexed) ...[
+                InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  autofocus: index == 0,
+                  focusColor: Colors.red,
+                  onTap: () {
+                    context
+                        .read<LocalizationCubit>()
+                        .setLocale(value.localeCode);
+                    Navigator.of(context).pop();
+                  },
+                  child: Row(
+                    children: [
+                      CountryFlag.fromCountryCode(
+                        value.countryCode,
+                        height: 24,
+                        width: 32,
+                        shape: const RoundedRectangle(3),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        value.name,
+                        style: GoogleFonts.sora(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w400,
+                          height: 1.5,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 8),
+              ]
+            ]),
+          );
+        });
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.uiKitColors;
     final l = context.l;
-    final intro = [l.aboutIntro1, l.aboutIntro2, l.aboutIntro3, l.aboutIntro4, l.aboutIntro5];
-
+    final intro = [
+      l.aboutIntro1,
+      l.aboutIntro2,
+      l.aboutIntro3,
+      l.aboutIntro4,
+      l.aboutIntro5
+    ];
+    final selectedLanguage = FndtvLanguage.fromLocaleCode(
+      context.watch<LocalizationCubit>().state.locale.languageCode,
+    );
     return Scaffold(
       backgroundColor: colors.bgPrimary,
       body: SingleChildScrollView(
@@ -35,62 +91,100 @@ class NewAboutPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ─── Branded crest header ───
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 22),
-              decoration: BoxDecoration(
-                color: const Color(0xFFA83734),
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: Center(
-                child: Image.asset(
-                  'assets/img/main_logo_transparent.png',
-                  height: 92,
-                  fit: BoxFit.contain,
+            _TvScrollSection(
+              autofocus: true,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 22),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFA83734),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Center(
+                  child: Image.asset(
+                    'assets/img/main_logo_transparent.png',
+                    height: 92,
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 16),
-
-            // ─── What is FNDTV? ───
+            const SizedBox(height: 16),
             _SectionCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _Heading(text: l.aboutWhatTitle, colors: colors),
-                  const SizedBox(height: 14),
-                  for (final paragraph in intro) ...[
+                  _Heading(text: l.selectLanguage, colors: colors),
+                  const SizedBox(height: 10),
+                  Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      child: InkWell(
+                        focusColor: Colors.red,
+                        onTap: () => _openSheet(context),
+                        customBorder: const CircleBorder(),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                width: 1.5),
+                          ),
+                          child: CountryFlag.fromCountryCode(
+                            selectedLanguage.countryCode,
+                            height: 32,
+                            width: 32,
+                            shape: const Circle(),
+                          ),
+                        ),
+                      )),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            // ─── What is FNDTV? ───
+            _TvScrollSection(
+              child: _SectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _Heading(text: l.aboutWhatTitle, colors: colors),
+                    const SizedBox(height: 14),
+                    for (final paragraph in intro) ...[
+                      Text(
+                        paragraph,
+                        style: GoogleFonts.sora(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w400,
+                          height: 1.6,
+                          color: colors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    const SizedBox(height: 8),
+                    // Address
                     Text(
-                      paragraph,
+                      l.aboutPlatform,
                       style: GoogleFonts.sora(
                         fontSize: 15,
-                        fontWeight: FontWeight.w400,
-                        height: 1.6,
-                        color: colors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        color: colors.accent,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 2),
+                    Text(
+                      '502 N Central Ave Chicago, IL 60644 - USA',
+                      style: GoogleFonts.sora(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: colors.textMuted,
+                      ),
+                    ),
                   ],
-                  const SizedBox(height: 8),
-                  // Address
-                  Text(
-                    l.aboutPlatform,
-                    style: GoogleFonts.sora(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: colors.accent,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '502 N Central Ave Chicago, IL 60644 - USA',
-                    style: GoogleFonts.sora(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: colors.textMuted,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
 
@@ -217,6 +311,19 @@ class _DonationButton extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () => _launch(context),
+        onFocusChange: (hasFocus) {
+          if (hasFocus) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (context.mounted) {
+                Scrollable.ensureVisible(
+                  context,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                );
+              }
+            });
+          }
+        },
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           child: Row(
@@ -245,6 +352,36 @@ class _DonationButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Wraps a non-interactive section so the d-pad can navigate to it and
+/// [Scrollable.ensureVisible] scrolls it into view automatically.
+class _TvScrollSection extends StatelessWidget {
+  final Widget child;
+  final bool autofocus;
+
+  const _TvScrollSection({required this.child, this.autofocus = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      autofocus: autofocus,
+      onFocusChange: (hasFocus) {
+        if (hasFocus) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (context.mounted) {
+              Scrollable.ensureVisible(
+                context,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            }
+          });
+        }
+      },
+      child: child,
     );
   }
 }
