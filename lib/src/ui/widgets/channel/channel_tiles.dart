@@ -104,7 +104,7 @@ class FndtvSectionHeader extends StatelessWidget {
             style: GoogleFonts.sora(
               fontSize: 17,
               fontWeight: FontWeight.w700,
-              color: colors.accent,
+              color: colors.textPrimary, // white/light title (TV style); dot stays red
             ),
           ),
         ],

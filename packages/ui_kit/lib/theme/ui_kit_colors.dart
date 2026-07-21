@@ -65,21 +65,22 @@ class UiKitColors {
   /// (Enum value is still named `blue` for backwards compatibility, but the
   /// palette is the FNDTV light/red brand.)
   static const blue = UiKitColors(
-    bgPrimary: Color(0xFFECEEF1),     // Light background (white-ish)
-    bgSurface: Color(0xFFF4F6F8),     // Light surface
-    bgCard: Color(0xFFFFFFFF),        // Card background (white)
-    bgCardHover: Color(0xFFF7F8FA),   // Hovered/active card
-    bgHero: Color(0xFFF4F6F8),        // Hero area background
-    border: Color(0xFFE1E4E9),        // Subtle border
-    borderStrong: Color(0xFFC9CED6),  // Stronger border
-    textPrimary: Color(0xFF1A1C1E),   // Near-black primary text
-    textMuted: Color(0xFF5A6068),     // Muted grey text
-    textHint: Color(0xFF9AA0A8),      // Hint text
-    accent: Color(0xFFA83734),        // Brand red accent
-    accentDim: Color(0xFFE9C9C8),     // Light red tint
-    accentHover: Color(0xFF8E2D2A),   // Darker red (hover/focus)
-    badgeNowBg: Color(0xFFA83734),    // Red badge background
-    badgeNowText: Color(0xFFA83734),  // Red (active nav / badge text)
+    // TV-style scheme: dark navy backgrounds + red accents (blue + red).
+    bgPrimary: Color(0xFF0E0F13),     // TV dark navy background
+    bgSurface: Color(0xFF191B22),     // TV dark surface (nav bar / tabs)
+    bgCard: Color(0xFF191B22),        // Dark card background
+    bgCardHover: Color(0xFF23262F),   // Hovered/active card
+    bgHero: Color(0xFF14161C),        // Hero area background
+    border: Color(0xFF2A2D36),        // Subtle border
+    borderStrong: Color(0xFF3B3F4A),  // Stronger border
+    textPrimary: Color(0xFFF1F2F5),   // Light primary text
+    textMuted: Color(0xFF9AA0AB),     // Muted light-grey text
+    textHint: Color(0xFF6B7280),      // Hint text
+    accent: Color(0xFFC7443F),        // Brand red (brightened for dark bg)
+    accentDim: Color(0xFF4A211F),     // Dim red
+    accentHover: Color(0xFFD9564F),   // Brighter red (hover/focus)
+    badgeNowBg: Color(0xFFC7443F),    // Red badge background
+    badgeNowText: Color(0xFFC7443F),  // Red (active nav / badge text)
   );
 
   /// Dark theme - Alternative theme for future use

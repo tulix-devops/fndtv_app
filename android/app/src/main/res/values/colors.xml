@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#000000</color>
+    <!-- Adaptive launcher-icon background — brand red (was #000000 black). -->
+    <color name="ic_launcher_background">#A83734</color>
+    <!-- Brand red — matches the Flutter splash background (0xFFA83734). -->
+    <color name="splash_red">#A83734</color>
 </resources>

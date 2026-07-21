@@ -7,6 +7,11 @@
         <item name="android:windowDrawsSystemBarBackgrounds">false</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
         <item name="android:windowBackground">@drawable/launch_background</item>
+        <!-- Android 12+ system splash: brand-red background + the transparent
+             logo (foreground) as the icon, so there's no black disc and the
+             launcher icon is left unchanged. -->
+        <item name="android:windowSplashScreenBackground">@color/splash_red</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
     </style>
     <!-- Theme applied to the Android Window as soon as the process has started.
          This theme determines the color of the Android Window while your

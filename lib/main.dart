@@ -1,6 +1,7 @@
 ﻿import 'dart:io';
 
 import 'package:commons/commons.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:fndtv/src/ui/app.dart';
@@ -21,8 +22,13 @@ Future<void> main() async {
     androidShowNotificationBadge: true,
   );
 
-  // TODO: Remove it for production CODE !!!
-  HttpOverrides.global = AppHttpOverrides();
+  // DEBUG ONLY: disables TLS certificate validation (accepts any cert) to allow
+  // talking to servers with self-signed/invalid certs during development. Gated
+  // to debug builds so it is tree-shaken out of release — never ship this to
+  // production (it opens the app to man-in-the-middle attacks).
+  if (kDebugMode) {
+    HttpOverrides.global = AppHttpOverrides();
+  }
 
   // await Firebase.initializeApp(
   //   options: DefaultFirebaseOptions.currentPlatform,

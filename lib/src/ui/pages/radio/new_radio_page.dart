@@ -56,18 +56,26 @@ class NewRadioPage extends StatelessWidget {
                     // Banner artwork
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.black,
                         borderRadius: BorderRadius.circular(22),
                         border: Border.all(width: 3, color: const Color(0xFFFFE088)),
                       ),
-                      clipBehavior: Clip.antiAlias,
-                      child: AspectRatio(
-                        aspectRatio: 461 / 310,
-                        child: Image.network(
-                          channel.images.getBanner(),
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => Center(
-                            child: Icon(Icons.mic_rounded, size: 64, color: colors.textMuted),
+                      child: ClipRRect(
+                        // Inner radius = outer (22) - border width (3) so the
+                        // image is clipped INSIDE the gold border and can't bleed
+                        // past the rounded corners.
+                        borderRadius: BorderRadius.circular(19),
+                        child: AspectRatio(
+                          aspectRatio: 461 / 310,
+                          child: Container(
+                            color: Colors.black,
+                            child: Image.network(
+                              channel.images.getBanner(),
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) => Center(
+                                child: Icon(Icons.mic_rounded,
+                                    size: 64, color: colors.textMuted),
+                              ),
+                            ),
                           ),
                         ),
                       ),
