@@ -215,4 +215,108 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get settingsDarkTheme => 'Thème sombre';
+
+  @override
+  String get navNetwork => 'Réseau';
+
+  @override
+  String get networkTitle => 'Réseau';
+
+  @override
+  String get networkConnectionCard => 'Connexion';
+
+  @override
+  String get networkModeWifi => 'Wi-Fi';
+
+  @override
+  String get networkModeWired => 'Filaire';
+
+  @override
+  String get networkStatusLabel => 'État';
+
+  @override
+  String get networkStatusConnected => 'Connecté';
+
+  @override
+  String get networkStatusOffline => 'Hors ligne';
+
+  @override
+  String get networkSsid => 'Réseau';
+
+  @override
+  String get networkIp => 'Adresse IP';
+
+  @override
+  String get networkEthernetCard => 'Ethernet';
+
+  @override
+  String get networkEthernetLinked => 'Câble connecté';
+
+  @override
+  String get networkEthernetNoCable => 'Aucun câble détecté';
+
+  @override
+  String get networkDeviceCard => 'Cet appareil';
+
+  @override
+  String get networkDeviceMac => 'Adresse MAC';
+
+  @override
+  String get networkDeviceSerial => 'Numéro de série';
+
+  @override
+  String get networkDeviceId => 'ID de l\'appareil';
+
+  @override
+  String get networkDeviceVersion => 'Version de l\'app';
+
+  @override
+  String get networkAvailable => 'Réseaux disponibles';
+
+  @override
+  String get networkScan => 'Rechercher';
+
+  @override
+  String get networkScanning => 'Recherche…';
+
+  @override
+  String get networkNoneFound => 'Aucun réseau trouvé';
+
+  @override
+  String get networkPasswordTitle => 'Saisir le mot de passe Wi-Fi';
+
+  @override
+  String get networkPasswordHint => 'Mot de passe';
+
+  @override
+  String get networkConnect => 'Se connecter';
+
+  @override
+  String get networkConnecting => 'Connexion…';
+
+  @override
+  String get networkJoinFailed =>
+      'Connexion impossible — vérifiez le mot de passe';
+
+  @override
+  String get networkRetry => 'Réessayer';
+
+  @override
+  String get networkWiredWarnTitle => 'Aucun câble détecté';
+
+  @override
+  String get networkWiredWarnBody =>
+      'Passer en filaire maintenant mettra le boîtier hors ligne jusqu\'au branchement d\'un câble. Continuer ?';
+
+  @override
+  String get networkWiredWarnConfirm => 'Changer quand même';
+
+  @override
+  String get networkWiredWarnCancel => 'Annuler';
+
+  @override
+  String get offlineTitle => 'Pas de connexion Internet';
+
+  @override
+  String get offlineCta => 'Configurer le réseau';
 }

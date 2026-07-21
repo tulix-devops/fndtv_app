@@ -501,6 +501,210 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dark Theme'**
   String get settingsDarkTheme;
+
+  /// No description provided for @navNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get navNetwork;
+
+  /// No description provided for @networkTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get networkTitle;
+
+  /// No description provided for @networkConnectionCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection'**
+  String get networkConnectionCard;
+
+  /// No description provided for @networkModeWifi.
+  ///
+  /// In en, this message translates to:
+  /// **'Wi-Fi'**
+  String get networkModeWifi;
+
+  /// No description provided for @networkModeWired.
+  ///
+  /// In en, this message translates to:
+  /// **'Wired'**
+  String get networkModeWired;
+
+  /// No description provided for @networkStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get networkStatusLabel;
+
+  /// No description provided for @networkStatusConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get networkStatusConnected;
+
+  /// No description provided for @networkStatusOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get networkStatusOffline;
+
+  /// No description provided for @networkSsid.
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get networkSsid;
+
+  /// No description provided for @networkIp.
+  ///
+  /// In en, this message translates to:
+  /// **'IP address'**
+  String get networkIp;
+
+  /// No description provided for @networkEthernetCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Ethernet'**
+  String get networkEthernetCard;
+
+  /// No description provided for @networkEthernetLinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Cable connected'**
+  String get networkEthernetLinked;
+
+  /// No description provided for @networkEthernetNoCable.
+  ///
+  /// In en, this message translates to:
+  /// **'No cable detected'**
+  String get networkEthernetNoCable;
+
+  /// No description provided for @networkDeviceCard.
+  ///
+  /// In en, this message translates to:
+  /// **'This device'**
+  String get networkDeviceCard;
+
+  /// No description provided for @networkDeviceMac.
+  ///
+  /// In en, this message translates to:
+  /// **'MAC address'**
+  String get networkDeviceMac;
+
+  /// No description provided for @networkDeviceSerial.
+  ///
+  /// In en, this message translates to:
+  /// **'Serial number'**
+  String get networkDeviceSerial;
+
+  /// No description provided for @networkDeviceId.
+  ///
+  /// In en, this message translates to:
+  /// **'Device ID'**
+  String get networkDeviceId;
+
+  /// No description provided for @networkDeviceVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'App version'**
+  String get networkDeviceVersion;
+
+  /// No description provided for @networkAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Available networks'**
+  String get networkAvailable;
+
+  /// No description provided for @networkScan.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan'**
+  String get networkScan;
+
+  /// No description provided for @networkScanning.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning…'**
+  String get networkScanning;
+
+  /// No description provided for @networkNoneFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No networks found'**
+  String get networkNoneFound;
+
+  /// No description provided for @networkPasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter Wi-Fi password'**
+  String get networkPasswordTitle;
+
+  /// No description provided for @networkPasswordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get networkPasswordHint;
+
+  /// No description provided for @networkConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get networkConnect;
+
+  /// No description provided for @networkConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting…'**
+  String get networkConnecting;
+
+  /// No description provided for @networkJoinFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t connect — check the password'**
+  String get networkJoinFailed;
+
+  /// No description provided for @networkRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get networkRetry;
+
+  /// No description provided for @networkWiredWarnTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No cable detected'**
+  String get networkWiredWarnTitle;
+
+  /// No description provided for @networkWiredWarnBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Switching to wired now will take the box offline until a cable is plugged in. Continue?'**
+  String get networkWiredWarnBody;
+
+  /// No description provided for @networkWiredWarnConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch anyway'**
+  String get networkWiredWarnConfirm;
+
+  /// No description provided for @networkWiredWarnCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get networkWiredWarnCancel;
+
+  /// No description provided for @offlineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No internet connection'**
+  String get offlineTitle;
+
+  /// No description provided for @offlineCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up network'**
+  String get offlineCta;
 }
 
 class _AppLocalizationsDelegate

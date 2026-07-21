@@ -214,4 +214,108 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get settingsDarkTheme => 'Tema oscuro';
+
+  @override
+  String get navNetwork => 'Red';
+
+  @override
+  String get networkTitle => 'Red';
+
+  @override
+  String get networkConnectionCard => 'Conexión';
+
+  @override
+  String get networkModeWifi => 'Wi-Fi';
+
+  @override
+  String get networkModeWired => 'Por cable';
+
+  @override
+  String get networkStatusLabel => 'Estado';
+
+  @override
+  String get networkStatusConnected => 'Conectado';
+
+  @override
+  String get networkStatusOffline => 'Sin conexión';
+
+  @override
+  String get networkSsid => 'Red';
+
+  @override
+  String get networkIp => 'Dirección IP';
+
+  @override
+  String get networkEthernetCard => 'Ethernet';
+
+  @override
+  String get networkEthernetLinked => 'Cable conectado';
+
+  @override
+  String get networkEthernetNoCable => 'No se detecta cable';
+
+  @override
+  String get networkDeviceCard => 'Este dispositivo';
+
+  @override
+  String get networkDeviceMac => 'Dirección MAC';
+
+  @override
+  String get networkDeviceSerial => 'Número de serie';
+
+  @override
+  String get networkDeviceId => 'ID del dispositivo';
+
+  @override
+  String get networkDeviceVersion => 'Versión de la app';
+
+  @override
+  String get networkAvailable => 'Redes disponibles';
+
+  @override
+  String get networkScan => 'Buscar';
+
+  @override
+  String get networkScanning => 'Buscando…';
+
+  @override
+  String get networkNoneFound => 'No se encontraron redes';
+
+  @override
+  String get networkPasswordTitle => 'Introduce la contraseña Wi-Fi';
+
+  @override
+  String get networkPasswordHint => 'Contraseña';
+
+  @override
+  String get networkConnect => 'Conectar';
+
+  @override
+  String get networkConnecting => 'Conectando…';
+
+  @override
+  String get networkJoinFailed =>
+      'No se pudo conectar — comprueba la contraseña';
+
+  @override
+  String get networkRetry => 'Reintentar';
+
+  @override
+  String get networkWiredWarnTitle => 'No se detecta cable';
+
+  @override
+  String get networkWiredWarnBody =>
+      'Cambiar a cable ahora dejará el dispositivo sin conexión hasta que se conecte un cable. ¿Continuar?';
+
+  @override
+  String get networkWiredWarnConfirm => 'Cambiar igualmente';
+
+  @override
+  String get networkWiredWarnCancel => 'Cancelar';
+
+  @override
+  String get offlineTitle => 'Sin conexión a Internet';
+
+  @override
+  String get offlineCta => 'Configurar red';
 }

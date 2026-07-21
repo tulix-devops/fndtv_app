@@ -214,4 +214,107 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsDarkTheme => 'Dark Theme';
+
+  @override
+  String get navNetwork => 'Network';
+
+  @override
+  String get networkTitle => 'Network';
+
+  @override
+  String get networkConnectionCard => 'Connection';
+
+  @override
+  String get networkModeWifi => 'Wi-Fi';
+
+  @override
+  String get networkModeWired => 'Wired';
+
+  @override
+  String get networkStatusLabel => 'Status';
+
+  @override
+  String get networkStatusConnected => 'Connected';
+
+  @override
+  String get networkStatusOffline => 'Offline';
+
+  @override
+  String get networkSsid => 'Network';
+
+  @override
+  String get networkIp => 'IP address';
+
+  @override
+  String get networkEthernetCard => 'Ethernet';
+
+  @override
+  String get networkEthernetLinked => 'Cable connected';
+
+  @override
+  String get networkEthernetNoCable => 'No cable detected';
+
+  @override
+  String get networkDeviceCard => 'This device';
+
+  @override
+  String get networkDeviceMac => 'MAC address';
+
+  @override
+  String get networkDeviceSerial => 'Serial number';
+
+  @override
+  String get networkDeviceId => 'Device ID';
+
+  @override
+  String get networkDeviceVersion => 'App version';
+
+  @override
+  String get networkAvailable => 'Available networks';
+
+  @override
+  String get networkScan => 'Scan';
+
+  @override
+  String get networkScanning => 'Scanning…';
+
+  @override
+  String get networkNoneFound => 'No networks found';
+
+  @override
+  String get networkPasswordTitle => 'Enter Wi-Fi password';
+
+  @override
+  String get networkPasswordHint => 'Password';
+
+  @override
+  String get networkConnect => 'Connect';
+
+  @override
+  String get networkConnecting => 'Connecting…';
+
+  @override
+  String get networkJoinFailed => 'Couldn\'t connect — check the password';
+
+  @override
+  String get networkRetry => 'Try again';
+
+  @override
+  String get networkWiredWarnTitle => 'No cable detected';
+
+  @override
+  String get networkWiredWarnBody =>
+      'Switching to wired now will take the box offline until a cable is plugged in. Continue?';
+
+  @override
+  String get networkWiredWarnConfirm => 'Switch anyway';
+
+  @override
+  String get networkWiredWarnCancel => 'Cancel';
+
+  @override
+  String get offlineTitle => 'No internet connection';
+
+  @override
+  String get offlineCta => 'Set up network';
 }
