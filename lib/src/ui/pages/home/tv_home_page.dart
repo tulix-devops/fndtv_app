@@ -5,45 +5,15 @@ import 'package:fndtv/src/bloc/content_cubit/content_cubit.dart';
 import 'package:app_localization/app_localization.dart';
 import 'package:fndtv/src/core/constants/fndtv_channels.dart';
 import 'package:fndtv/src/ui/widgets/channel/channel_tiles.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:fndtv/src/ui/widgets/tv/tv_widgets.dart';
 import 'package:ui_kit/ui_kit.dart';
 
-/// Home — editorial layout from the live API. Shows the selected language's
-/// live channels (main + Chicago time), then its radio.
-class TvHomePage extends StatefulWidget {
+/// Home (TV) — dark 10-foot layout: red-accented section headers with a
+/// horizontal rail of focusable channel cards for the selected language.
+class TvHomePage extends StatelessWidget {
   final FndtvLanguage language;
 
   const TvHomePage({super.key, required this.language});
-
-  @override
-  State<TvHomePage> createState() => _TvHomePageState();
-}
-
-class _TvHomePageState extends State<TvHomePage> {
-  final _mainLiveFocusNode = FocusNode(debugLabel: 'mainLive');
-  final _timeShiftFocusNode = FocusNode(debugLabel: 'timeShift');
-  final _radioFocusNode = FocusNode(debugLabel: 'radio');
-
-  @override
-  void initState() {
-    super.initState();
-    _mainLiveFocusNode.addListener(_rebuild);
-    _timeShiftFocusNode.addListener(_rebuild);
-    _radioFocusNode.addListener(_rebuild);
-  }
-
-  @override
-  void dispose() {
-    _mainLiveFocusNode.removeListener(_rebuild);
-    _timeShiftFocusNode.removeListener(_rebuild);
-    _radioFocusNode.removeListener(_rebuild);
-    _mainLiveFocusNode.dispose();
-    _timeShiftFocusNode.dispose();
-    _radioFocusNode.dispose();
-    super.dispose();
-  }
-
-  void _rebuild() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +21,7 @@ class _TvHomePageState extends State<TvHomePage> {
     final l = context.l;
 
     return Scaffold(
-      backgroundColor: colors.bgPrimary,
+      backgroundColor: kTvBg,
       body: BlocBuilder<ContentCubit, ContentState>(
         builder: (context, state) {
           if (contentIsLoading(state)) return ContentLoading(colors: colors);
@@ -59,75 +29,58 @@ class _TvHomePageState extends State<TvHomePage> {
             return ContentError(colors: colors);
           }
 
-          final live = channelsForLanguage(
-              state.contentList?['8']?.data, widget.language);
+          final live =
+              channelsForLanguage(state.contentList?['8']?.data, language);
           final mainLive = live.where((m) => !m.isTimeShift).toList();
           final timeShift = live.where((m) => m.isTimeShift).toList();
-          final radio = channelsForLanguage(
-              state.contentList?['10']?.data, widget.language);
+          final radio =
+              channelsForLanguage(state.contentList?['10']?.data, language);
 
           return FocusTraversalGroup(
             policy: ReadingOrderTraversalPolicy(),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
-              children: [
-                if (mainLive.isNotEmpty) ...[
-                  FndtvSectionHeader(l.sectionLiveNow),
-                  AppCard(
-                    image: mainLive.first.images.getBanner(),
-                    focusNode: _mainLiveFocusNode,
-                    isSelected: _mainLiveFocusNode.hasFocus,
-                    onTap: () => openLiveDetail(context, mainLive.first,
-                        contentType: ContentType.television),
-                    content: Text(
-                      mainLive.first.title,
-                      style: GoogleFonts.sora(
-                        color: colors.textHint,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(44, 22, 44, 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (mainLive.isNotEmpty) ...[
+                    TvSectionHeader(l.sectionLiveNow),
+                    Expanded(
+                      child: TvChannelRow(
+                        channel: mainLive.first,
+                        badge: l.badgeLive,
+                        autofocus: true,
+                        onTap: () => openLiveDetail(context, mainLive.first,
+                            contentType: ContentType.television),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 22),
-                ],
-                if (timeShift.isNotEmpty) ...[
-                  FndtvSectionHeader(l.sectionChicagoTime),
-                  AppCard(
-                    image: timeShift.first.images.getBanner(),
-                    focusNode: _timeShiftFocusNode,
-                    isSelected: _timeShiftFocusNode.hasFocus,
-                    onTap: () => openLiveDetail(context, timeShift.first,
-                        contentType: ContentType.television),
-                    content: Text(
-                      timeShift.first.title,
-                      style: GoogleFonts.sora(
-                        color: colors.textHint,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                    const SizedBox(height: 8),
+                  ],
+                  if (timeShift.isNotEmpty) ...[
+                    TvSectionHeader(l.sectionChicagoTime),
+                    Expanded(
+                      child: TvChannelRow(
+                        channel: timeShift.first,
+                        badge: l.badgeUsTime,
+                        onTap: () => openLiveDetail(context, timeShift.first,
+                            contentType: ContentType.television),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 22),
-                ],
-                if (radio.isNotEmpty) ...[
-                  FndtvSectionHeader(l.sectionRadio),
-                  AppCard(
-                    image: radio.first.images.getBanner(),
-                    focusNode: _radioFocusNode,
-                    isSelected: _radioFocusNode.hasFocus,
-                    onTap: () => openLiveDetail(context, radio.first,
-                        contentType: ContentType.radio),
-                    content: Text(
-                      radio.first.title,
-                      style: GoogleFonts.sora(
-                        color: colors.textHint,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                    const SizedBox(height: 8),
+                  ],
+                  if (radio.isNotEmpty) ...[
+                    TvSectionHeader(l.sectionRadio),
+                    Expanded(
+                      child: TvChannelRow(
+                        channel: radio.first,
+                        badge: l.badgeOnAir,
+                        onTap: () => openLiveDetail(context, radio.first,
+                            contentType: ContentType.radio),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           );
         },

@@ -48,6 +48,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get navLive => 'Direct';
 
   @override
+  String get navOnDemand => 'À la demande';
+
+  @override
   String get navRadio => 'Radio';
 
   @override
@@ -58,6 +61,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get tabTitleLive => 'DIRECT';
+
+  @override
+  String get tabTitleOnDemand => 'À LA DEMANDE';
 
   @override
   String get tabTitleRadio => 'RADIO';
@@ -72,10 +78,49 @@ class AppLocalizationsFr extends AppLocalizations {
   String get tabSubtitleLive => 'Regardez les chaînes FNDTV en direct';
 
   @override
+  String get tabSubtitleOnDemand => 'Films et émissions à la demande';
+
+  @override
   String get tabSubtitleRadio => 'Écoutez la radio FNDTV';
 
   @override
   String get selectLanguage => 'Choisir la langue';
+
+  @override
+  String get navUpdates => 'Mises à jour';
+
+  @override
+  String get updatesChecking => 'Recherche de mises à jour…';
+
+  @override
+  String get updatesUpToDate => 'Vous avez la dernière version';
+
+  @override
+  String get updatesAvailable => 'Mise à jour disponible';
+
+  @override
+  String get updatesUnavailable => 'Impossible de vérifier les mises à jour';
+
+  @override
+  String get updatesDownload => 'Télécharger la mise à jour';
+
+  @override
+  String get updatesRetry => 'Réessayer';
+
+  @override
+  String get updatesDownloading => 'Téléchargement…';
+
+  @override
+  String get updatesDownloaded => 'Téléchargement terminé';
+
+  @override
+  String get updatesInstall => 'Installer';
+
+  @override
+  String get updatesInstalling => 'Installation…';
+
+  @override
+  String get navMenu => 'Menu';
 
   @override
   String get sectionLiveNow => 'En direct';
@@ -88,6 +133,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get sectionLiveTv => 'TV en direct';
+
+  @override
+  String get sectionOnDemand => 'À la demande';
 
   @override
   String get badgeLive => 'DIRECT';
@@ -157,6 +205,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get donationOpenError => 'Impossible d’ouvrir la page de don';
+
+  @override
+  String get donateScanHint =>
+      'Scannez ce code avec votre téléphone pour faire un don';
 
   @override
   String get settingsBlueTheme => 'Thème bleu';

@@ -11,6 +11,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:fndtv/src/index.dart';
+import 'package:fndtv/src/ui/widgets/stb/stb_power_guard.dart';
 import 'package:fndtv/src/ui/app_view.dart';
 import 'package:fndtv/src/ui/pages/main/main_container_page.dart';
 import 'package:fndtv/src/ui/pages/live_detail/new_live_detail_page.dart';
@@ -78,6 +79,13 @@ class _AppState extends State<App> {
               },
               child: MaterialApp(
                 debugShowCheckedModeBanner: false,
+                // STB: power guard (inactivity → sleep) via a self-contained
+                // overlay wrapped around the app.
+                builder: StbSystemService.isStb
+                    ? (context, child) => StbPowerGuard(
+                          child: child ?? const SizedBox.shrink(),
+                        )
+                    : null,
                 locale: context.select<LocalizationCubit, Locale>(
                   (c) => c.state.locale,
                 ),

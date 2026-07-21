@@ -5,14 +5,18 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fndtv/src/ui/widgets/fndtv_bottom_navigation_bar.dart';
 import 'package:fndtv/src/ui/widgets/radio/radio_mini_bar.dart';
+import 'package:fndtv/src/ui/widgets/tv/tv_widgets.dart'
+    show kTvBg, kTvAccent;
 import 'package:fndtv/src/ui/widgets/widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fndtv/src/bloc/content_cubit/content_cubit.dart';
 import 'package:fndtv/src/core/constants/fndtv_channels.dart';
 import 'package:fndtv/src/ui/pages/home/new_home_page.dart';
 import 'package:fndtv/src/ui/pages/live/new_live_page.dart';
+import 'package:fndtv/src/ui/pages/on_demand/new_on_demand_page.dart';
 import 'package:fndtv/src/ui/pages/radio/new_radio_page.dart';
 import 'package:fndtv/src/ui/pages/about/new_about_page.dart';
+import 'package:fndtv/src/ui/pages/updates/tv_updates_page.dart';
 import 'package:fndtv/src/ui/pages/settings/settings_page.dart';
 import 'package:app_localization/app_localization.dart';
 import 'package:ui_kit/ui_kit.dart';
@@ -20,6 +24,7 @@ import 'package:ui_kit/ui_kit.dart';
 enum _MainTab {
   home,
   live,
+  onDemand,
   radio,
   about,
 }
@@ -28,6 +33,7 @@ extension _MainTabX on _MainTab {
   String title(BuildContext context) => switch (this) {
         _MainTab.home => context.l.tabTitleHome,
         _MainTab.live => context.l.tabTitleLive,
+        _MainTab.onDemand => context.l.tabTitleOnDemand,
         _MainTab.radio => context.l.tabTitleRadio,
         _MainTab.about => context.l.tabTitleAbout,
       };
@@ -35,6 +41,7 @@ extension _MainTabX on _MainTab {
   String subtitle(BuildContext context) => switch (this) {
         _MainTab.home => context.l.tabSubtitleHome,
         _MainTab.live => context.l.tabSubtitleLive,
+        _MainTab.onDemand => context.l.tabSubtitleOnDemand,
         _MainTab.radio => context.l.tabSubtitleRadio,
         _MainTab.about => '',
       };
@@ -42,6 +49,7 @@ extension _MainTabX on _MainTab {
   Widget buildPage(FndtvLanguage language) => switch (this) {
         _MainTab.home => NewHomePage(language: language),
         _MainTab.live => NewLivePage(language: language),
+        _MainTab.onDemand => NewOnDemandPage(language: language),
         _MainTab.radio => NewRadioPage(language: language),
         _MainTab.about => NewAboutPage(language: language),
       };
@@ -66,6 +74,10 @@ class _MainContainerPageState extends State<MainContainerPage> {
   int _currentIndex = 0;
   late PageController _pageController;
 
+  /// Lets us restore D-pad focus to the TV nav rail after the language dialog
+  /// closes (its item focus nodes get disposed while the dialog holds focus).
+  final GlobalKey<AppScaffoldState> _scaffoldKey = GlobalKey<AppScaffoldState>();
+
   @override
   void initState() {
     super.initState();
@@ -82,7 +94,8 @@ class _MainContainerPageState extends State<MainContainerPage> {
       ),
     );
     // Load live (type 8) + radio (type 10) channels from the API.
-    context.read<ContentCubit>().getContentForMultipleTypes([8, 10]);
+    // Live (8), Radio (10), On Demand / VOD (17).
+    context.read<ContentCubit>().getContentForMultipleTypes([8, 10, 17]);
   }
 
   @override
@@ -104,6 +117,57 @@ class _MainContainerPageState extends State<MainContainerPage> {
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
     );
+  }
+
+  /// The TV nav rail's last items are the language switcher and the updates
+  /// check — selecting either opens a popup over the current screen instead of
+  /// switching pages. They sit after the five tabs (home, live, on demand,
+  /// radio, about).
+  static const int _kLanguageNavIndex = 5;
+  static const int _kUpdatesNavIndex = 6;
+
+  void _onNavSelected(int index) {
+    if (index == _kLanguageNavIndex) {
+      _openTvLanguageDialog();
+      return;
+    }
+    if (index == _kUpdatesNavIndex) {
+      _openUpdatesPage();
+      return;
+    }
+    _onTabTapped(index);
+  }
+
+  /// TV software-update check — a full-screen pushed page; focus returns to the
+  /// nav rail once it closes.
+  Future<void> _openUpdatesPage() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => const TvUpdatesPage()),
+    );
+    if (mounted) _scaffoldKey.currentState?.requestNavFocus();
+  }
+
+  /// TV language picker. A full-screen pushed page (not a dialog/bottom sheet)
+  /// so the remote gets its own focus scope with nothing interactive behind it,
+  /// and focus is handed back to the nav rail once it closes.
+  Future<void> _openTvLanguageDialog() async {
+    final selected = FndtvLanguage.fromLocaleCode(
+      context.read<LocalizationCubit>().state.locale.languageCode,
+    );
+    final localizationCubit = context.read<LocalizationCubit>();
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => _TvLanguagePage(
+          selected: selected,
+          onSelected: (lang) {
+            if (lang != selected) {
+              localizationCubit.setLocale(lang.localeCode);
+            }
+          },
+        ),
+      ),
+    );
+    if (mounted) _scaffoldKey.currentState?.requestNavFocus();
   }
 
   Widget _buildBody(
@@ -184,7 +248,7 @@ class _MainContainerPageState extends State<MainContainerPage> {
             physics: const BouncingScrollPhysics(),
             itemCount: _tabs.length,
             itemBuilder: (context, index) => Padding(
-              padding: const EdgeInsets.all(8.0),
+              padding: context.isTv ? EdgeInsets.zero : const EdgeInsets.all(8.0),
               child: _tabs[index].buildPage(selectedLanguage),
             ),
           ),
@@ -210,14 +274,26 @@ class _MainContainerPageState extends State<MainContainerPage> {
         ),
         child: context.isTv
             ? AppScaffold(
-                color: context.uiKitColors.bgPrimary,
+                key: _scaffoldKey,
+                color: kTvBg,
                 currentNavIndex: _currentIndex,
-                onNavChanged: _onTabTapped,
+                onNavChanged: _onNavSelected,
                 navigationItems: [
-                  (label: _tabs[0].title(context), icon: Assets.homeIcon),
-                  (label: _tabs[1].title(context), icon: Assets.tvShowIcon),
-                  (label: _tabs[2].title(context), icon: Assets.podcastIcon),
-                  (label: _tabs[3].title(context), icon: Assets.profile),
+                  (label: _tabs[0].title(context), icon: Icons.home_rounded),
+                  (label: _tabs[1].title(context), icon: Icons.podcasts_rounded),
+                  (
+                    label: _tabs[2].title(context),
+                    icon: Icons.ondemand_video_rounded
+                  ),
+                  (label: _tabs[3].title(context), icon: Icons.mic_rounded),
+                  (label: _tabs[4].title(context), icon: Icons.info_rounded),
+                  // Language switcher — shows the active language, opens a popup.
+                  (label: selectedLanguage.endonym, icon: Icons.language_rounded),
+                  // Software update check — opens a popup.
+                  (
+                    label: context.l.navUpdates,
+                    icon: Icons.system_update_rounded
+                  ),
                 ],
                 body: _buildBody(context, currentTab, selectedLanguage),
                 hasNavbar: true,
@@ -344,6 +420,213 @@ class _LanguageSheet extends StatelessWidget {
                 onTap: () => onChanged(lang),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LANGUAGE PAGE (TV — full-screen, D-pad focusable)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// A full-screen, remote-focusable language picker for the TV UI. Pushed as its
+/// own route so nothing is interactive behind it — the D-pad can only move
+/// between the options here. Each option owns a [FocusNode]; the active
+/// language is focused on open, and the select key applies it and pops.
+class _TvLanguagePage extends StatefulWidget {
+  final FndtvLanguage selected;
+  final ValueChanged<FndtvLanguage> onSelected;
+
+  const _TvLanguagePage({required this.selected, required this.onSelected});
+
+  @override
+  State<_TvLanguagePage> createState() => _TvLanguagePageState();
+}
+
+class _TvLanguagePageState extends State<_TvLanguagePage> {
+  final _langs = FndtvLanguage.values;
+  late final List<FocusNode> _nodes;
+  late final int _selectedIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    final idx = _langs.indexOf(widget.selected);
+    _selectedIndex = idx < 0 ? 0 : idx;
+    _nodes = List.generate(_langs.length, (i) {
+      return FocusNode(
+        onKeyEvent: (node, event) {
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+            if (i > 0) _nodes[i - 1].requestFocus();
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+            if (i < _langs.length - 1) _nodes[i + 1].requestFocus();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+      );
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _nodes[_selectedIndex].requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    for (final n in _nodes) {
+      n.dispose();
+    }
+    super.dispose();
+  }
+
+  void _select(FndtvLanguage lang) {
+    widget.onSelected(lang);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kTvBg,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.language_rounded,
+                      color: kTvAccent, size: 30),
+                  const SizedBox(width: 12),
+                  Text(
+                    context.l.selectLanguage,
+                    style: GoogleFonts.sora(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 28),
+              for (var i = 0; i < _langs.length; i++)
+                _TvLangRow(
+                  lang: _langs[i],
+                  isSelected: _langs[i] == widget.selected,
+                  focusNode: _nodes[i],
+                  autofocus: i == _selectedIndex,
+                  onTap: () => _select(_langs[i]),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A single focusable row in the TV language dialog. Highlights solid red when
+/// the remote focuses it, red-tinted when it's the active language.
+class _TvLangRow extends StatefulWidget {
+  final FndtvLanguage lang;
+  final bool isSelected;
+  final FocusNode focusNode;
+  final bool autofocus;
+  final VoidCallback onTap;
+
+  const _TvLangRow({
+    required this.lang,
+    required this.isSelected,
+    required this.focusNode,
+    required this.autofocus,
+    required this.onTap,
+  });
+
+  @override
+  State<_TvLangRow> createState() => _TvLangRowState();
+}
+
+class _TvLangRowState extends State<_TvLangRow> {
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focusNode.addListener(_onFocus);
+  }
+
+  void _onFocus() {
+    if (mounted) setState(() => _focused = widget.focusNode.hasFocus);
+  }
+
+  @override
+  void dispose() {
+    widget.focusNode.removeListener(_onFocus);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool focused = _focused;
+    final bool selected = widget.isSelected;
+
+    final Color bg = focused
+        ? kTvAccent
+        : (selected ? kTvAccent.withValues(alpha: 0.16) : Colors.transparent);
+    final Color fg =
+        focused ? Colors.white : (selected ? kTvAccent : Colors.white70);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          focusNode: widget.focusNode,
+          autofocus: widget.autofocus,
+          borderRadius: BorderRadius.circular(14),
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: focused || selected ? kTvAccent : Colors.white24,
+                width: focused || selected ? 1.4 : 0.6,
+              ),
+            ),
+            child: Row(
+              children: [
+                CountryFlag.fromCountryCode(
+                  widget.lang.countryCode,
+                  height: 26,
+                  width: 36,
+                  shape: const RoundedRectangle(4),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    widget.lang.endonym,
+                    style: GoogleFonts.sora(
+                      fontSize: 16,
+                      fontWeight:
+                          focused || selected ? FontWeight.w700 : FontWeight.w500,
+                      color: fg,
+                    ),
+                  ),
+                ),
+                if (selected)
+                  Icon(Icons.check_circle_rounded, color: fg, size: 22),
+              ],
+            ),
+          ),
         ),
       ),
     );

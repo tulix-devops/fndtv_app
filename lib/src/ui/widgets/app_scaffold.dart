@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fndtv/src/index.dart';
+import 'package:fndtv/src/ui/widgets/tv/tv_back_hint.dart';
+import 'package:fndtv/src/ui/widgets/tv/tv_clock.dart';
 import 'package:ui_kit/ui_kit.dart';
 
 class AppScaffold extends StatefulWidget {
@@ -28,7 +30,7 @@ class AppScaffold extends StatefulWidget {
   final bool hasNavbar;
 
   /// Dynamic navigation items - list of (label, icon) tuples
-  final List<({String label, String icon})>? navigationItems;
+  final List<({String label, IconData icon})>? navigationItems;
 
   /// Current navigation index
   final int? currentNavIndex;
@@ -37,10 +39,22 @@ class AppScaffold extends StatefulWidget {
   final void Function(int)? onNavChanged;
 
   @override
-  State<AppScaffold> createState() => _AppScaffoldState();
+  State<AppScaffold> createState() => AppScaffoldState();
 }
 
-class _AppScaffoldState extends State<AppScaffold> {
+class AppScaffoldState extends State<AppScaffold> {
+  /// Reveals the TV nav rail and moves D-pad focus onto it. Used to restore
+  /// focus after a full-screen popup (e.g. the language dialog) closes — by
+  /// then the rail's per-item focus nodes have been disposed, so the framework
+  /// cannot restore focus on its own.
+  void requestNavFocus() {
+    if (!mounted) return;
+    setState(() => hasFocus = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) navigationFocus.requestFocus();
+    });
+  }
+
   bool hasFocus = false;
   final FocusNode _placeHolderFocus = FocusNode();
 
@@ -87,13 +101,22 @@ class _AppScaffoldState extends State<AppScaffold> {
         }
         if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
             widget.hasNavbar) {
-          Future.delayed(const Duration(milliseconds: 200), () {
-            if (!mounted) return;
-            setState(() {
-              hasFocus = true;
-              navigationFocus.requestFocus();
+          // Let Left move within the content first (e.g. between grid columns).
+          // Only reveal the nav rail when focus is already at the left edge and
+          // couldn't move any further left.
+          if (event is KeyDownEvent || event is KeyRepeatEvent) {
+            final moved = FocusManager.instance.primaryFocus
+                    ?.focusInDirection(TraversalDirection.left) ??
+                false;
+            if (moved) return KeyEventResult.handled;
+            Future.delayed(const Duration(milliseconds: 200), () {
+              if (!mounted) return;
+              setState(() {
+                hasFocus = true;
+                navigationFocus.requestFocus();
+              });
             });
-          });
+          }
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
@@ -113,36 +136,48 @@ class _AppScaffoldState extends State<AppScaffold> {
 
   @override
   Widget build(BuildContext context) {
+    // Whether the TV nav rail is currently revealed (focused). When open the
+    // content slides right by the rail width so nothing is covered/dimmed.
+    final bool navOpen = context.isTv &&
+        widget.hasNavbar &&
+        (_placeHolderFocus.hasFocus || hasFocus);
+
+    final Widget content = Focus(
+      onFocusChange: (value) {
+        setState(() {});
+      },
+      focusNode: contentFocusNode,
+      child: widget.body,
+    );
+
     final Widget body = Stack(
       children: <Widget>[
-        Focus(
-          onFocusChange: (value) {
-            setState(() {});
-          },
-          focusNode: contentFocusNode,
-          child: widget.body,
-        ),
+        if (context.isTv)
+          AnimatedPadding(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.only(left: navOpen ? kTvNavWidth : 0),
+            child: content,
+          )
+        else
+          content,
         if (context.isTv) ...[
-          if (widget.hasNavbar && navigationFocus.hasFocus)
-            Container(
-              color: Colors.black26,
-            ),
           if (widget.hasNavbar)
             Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 350),
-                switchInCurve: Curves.easeInOut,
-                switchOutCurve: Curves.easeInOut,
+                duration: const Duration(milliseconds: 300),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
                 transitionBuilder: (child, animation) {
-                  return FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(-1.5, .3),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: child,
-                    ),
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(-1, 0),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
                   );
                 },
                 child: _placeHolderFocus.hasFocus || hasFocus
@@ -189,7 +224,21 @@ class _AppScaffoldState extends State<AppScaffold> {
                         child: const SizedBox.shrink(),
                       ),
               ),
-            )
+            ),
+          // Local-time clock, top-right. Tap/select to open date settings.
+          const Positioned(
+            top: 18,
+            right: 24,
+            child: TvClock(),
+          ),
+          // Back-to-menu hint, shown while the content (not the nav rail) is
+          // active — Back / Left reveals the navigation menu.
+          if (widget.hasNavbar && !navOpen)
+            const Positioned(
+              left: 24,
+              bottom: 16,
+              child: TvBackHint(),
+            ),
         ]
       ],
     );
@@ -240,7 +289,7 @@ class _DynamicBottomBar extends StatelessWidget {
     required this.onPressed,
   });
 
-  final List<({String label, String icon})> items;
+  final List<({String label, IconData icon})> items;
   final int currentIndex;
   final void Function(int) onPressed;
 
@@ -272,11 +321,10 @@ class _DynamicBottomBar extends StatelessWidget {
                   onPressed: () => onPressed(i),
                   child: Column(
                     children: [
-                      AppIcon(
+                      Icon(
                         items[i].icon,
                         color: itemColor,
-                        height: 24,
-                        width: 24,
+                        size: 24,
                       ),
                       Text(
                         items[i].label,

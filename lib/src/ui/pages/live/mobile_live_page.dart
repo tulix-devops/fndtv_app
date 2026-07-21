@@ -26,22 +26,18 @@ class MobileLivePage extends StatelessWidget {
           return ContentError(colors: colors);
         }
 
+        // All live channels — Europe and US time alike — under a single
+        // "En Direct" (live) section.
         final live =
             channelsForLanguage(state.contentList?['8']?.data, language);
-        final mainLive = live.where((m) => !m.isTimeShift).toList();
-        final timeShift = live.where((m) => m.isTimeShift).toList();
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
           children: [
-            if (mainLive.isNotEmpty) ...[
-              FndtvSectionHeader(l.sectionLiveTv),
-              LivePosterTile(channel: mainLive.first),
+            FndtvSectionHeader(l.sectionLiveNow),
+            for (final channel in live) ...[
+              LivePosterTile(channel: channel),
               const SizedBox(height: 22),
-            ],
-            if (timeShift.isNotEmpty) ...[
-              FndtvSectionHeader(l.sectionChicagoTime),
-              LivePosterTile(channel: timeShift.first, badge: l.badgeUsTime),
             ],
           ],
         );

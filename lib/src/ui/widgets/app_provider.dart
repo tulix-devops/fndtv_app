@@ -8,6 +8,8 @@ import 'package:local_storage/local_storage.dart';
 import 'package:fndtv/src/bloc/bloc.dart';
 import 'package:fndtv/src/bloc/theme_cubit/theme_cubit.dart';
 import 'package:fndtv/src/core/core.dart';
+import 'package:fndtv/src/data/data_sources/device/device_data_source.dart';
+import 'package:fndtv/src/data/repositories/device/device_repository.dart';
 import 'package:ui_kit/ui_kit.dart';
 
 class AppProvider extends StatefulWidget {
@@ -28,6 +30,17 @@ class _AppProviderState extends State<AppProvider> {
   );
   late final CustomHTTPClient _httpClient = CustomHTTPClient(_localAuthDataSource);
 
+  // Set-top box registration (runs on app init) + update checks.
+  late final DeviceRepositoryImpl _deviceRepository = DeviceRepositoryImpl(
+    dataSource: DeviceDataSource(),
+  );
+  late final DeviceRegistrationHandler _deviceRegistrationHandler =
+      DeviceRegistrationHandler(
+    deviceIdentityService: DeviceIdentityService(),
+    deviceRepository: _deviceRepository,
+    localStorage: _localStorage,
+  );
+
   @override
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
@@ -44,6 +57,12 @@ class _AppProviderState extends State<AppProvider> {
         ),
         RepositoryProvider<DeviceModelService>(
           create: (ctx) => DeviceModelService(),
+        ),
+        RepositoryProvider<DeviceRegistrationHandler>(
+          create: (ctx) => _deviceRegistrationHandler,
+        ),
+        RepositoryProvider<DeviceRepository>(
+          create: (ctx) => _deviceRepository,
         ),
         // RepositoryProvider<FirebaseService>(
         //   lazy: false,

@@ -10,6 +10,7 @@ import 'package:fndtv/src/data/models/content/live_model.dart';
 import 'package:ui_kit/ui_kit.dart';
 import 'package:fndtv/src/ui/widgets/app_video_player/screens/live_fullscreen.dart';
 import 'package:fndtv/src/ui/widgets/app_video_player/screens/vod_fullscreen.dart';
+import 'package:fndtv/src/ui/widgets/app_video_player/widgets/radio_now_playing.dart';
 import 'package:video_player/video_player.dart';
 
 part 'video_button.dart';
@@ -239,6 +240,10 @@ class _CustomPlayerControlState extends State<_CustomPlayerControl> {
         return Stack(
           alignment: Alignment.center,
           children: [
+            // Radio is audio-only: show a persistent "now playing" backdrop
+            // (stays visible even when the controls fade out).
+            if (widget.contentType == ContentType.radio)
+              RadioNowPlaying(video: widget.video),
             InkWell(
               focusNode: _inkFocus,
               onTap: () => context.read<VideoPlayerCubit>().controlVisibility(),

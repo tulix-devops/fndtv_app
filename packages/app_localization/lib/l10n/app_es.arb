@@ -15,24 +15,41 @@
 
   "navHome": "Inicio",
   "navLive": "En vivo",
+  "navOnDemand": "Bajo demanda",
   "navRadio": "Radio",
   "navAbout": "Acerca de",
 
   "tabTitleHome": "INICIO",
   "tabTitleLive": "EN VIVO",
+  "tabTitleOnDemand": "BAJO DEMANDA",
   "tabTitleRadio": "RADIO",
   "tabTitleAbout": "ACERCA DE FNDTV",
 
   "tabSubtitleHome": "Bienvenido a FNDTV",
   "tabSubtitleLive": "Vea los canales en vivo de FNDTV",
+  "tabSubtitleOnDemand": "Películas y programas bajo demanda",
   "tabSubtitleRadio": "Escuche la radio FNDTV",
 
   "selectLanguage": "Seleccionar idioma",
+
+  "navUpdates": "Actualizaciones",
+  "updatesChecking": "Buscando actualizaciones…",
+  "updatesUpToDate": "Tienes la última versión",
+  "updatesAvailable": "Actualización disponible",
+  "updatesUnavailable": "No se pudieron buscar actualizaciones",
+  "updatesDownload": "Descargar actualización",
+  "updatesRetry": "Reintentar",
+  "updatesDownloading": "Descargando…",
+  "updatesDownloaded": "Descarga completa",
+  "updatesInstall": "Instalar",
+  "updatesInstalling": "Instalando…",
+  "navMenu": "Menú",
 
   "sectionLiveNow": "En vivo ahora",
   "sectionChicagoTime": "Hora de Chicago",
   "sectionRadio": "Radio",
   "sectionLiveTv": "TV en vivo",
+  "sectionOnDemand": "Bajo demanda",
 
   "badgeLive": "EN VIVO",
   "badgeUsTime": "HORA EE. UU.",
@@ -58,6 +75,7 @@
   "aboutDonatePrompt": "Ayude a FNDTV a seguir emitiendo. Pulse abajo para donar:",
   "donate": "Donar",
   "donationOpenError": "No se pudo abrir la página de donación",
+  "donateScanHint": "Escanee este código con su teléfono para donar",
 
   "settingsBlueTheme": "Tema azul",
   "settingsDarkTheme": "Tema oscuro"

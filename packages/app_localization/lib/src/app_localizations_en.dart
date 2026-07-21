@@ -48,6 +48,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navLive => 'Live';
 
   @override
+  String get navOnDemand => 'On Demand';
+
+  @override
   String get navRadio => 'Radio';
 
   @override
@@ -58,6 +61,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tabTitleLive => 'LIVE';
+
+  @override
+  String get tabTitleOnDemand => 'ON DEMAND';
 
   @override
   String get tabTitleRadio => 'RADIO';
@@ -72,10 +78,49 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tabSubtitleLive => 'Watch FNDTV Live Channels';
 
   @override
+  String get tabSubtitleOnDemand => 'Movies and shows on demand';
+
+  @override
   String get tabSubtitleRadio => 'Listen to FNDTV Radio';
 
   @override
   String get selectLanguage => 'Select language';
+
+  @override
+  String get navUpdates => 'Updates';
+
+  @override
+  String get updatesChecking => 'Checking for updates…';
+
+  @override
+  String get updatesUpToDate => 'You\'re on the latest version';
+
+  @override
+  String get updatesAvailable => 'Update available';
+
+  @override
+  String get updatesUnavailable => 'Couldn\'t check for updates';
+
+  @override
+  String get updatesDownload => 'Download update';
+
+  @override
+  String get updatesRetry => 'Retry';
+
+  @override
+  String get updatesDownloading => 'Downloading…';
+
+  @override
+  String get updatesDownloaded => 'Download complete';
+
+  @override
+  String get updatesInstall => 'Install';
+
+  @override
+  String get updatesInstalling => 'Installing…';
+
+  @override
+  String get navMenu => 'Menu';
 
   @override
   String get sectionLiveNow => 'Live now';
@@ -88,6 +133,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sectionLiveTv => 'Live TV';
+
+  @override
+  String get sectionOnDemand => 'On Demand';
 
   @override
   String get badgeLive => 'LIVE';
@@ -157,6 +205,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get donationOpenError => 'Could not open the donation page';
+
+  @override
+  String get donateScanHint => 'Scan this code with your phone to donate';
 
   @override
   String get settingsBlueTheme => 'Blue Theme';

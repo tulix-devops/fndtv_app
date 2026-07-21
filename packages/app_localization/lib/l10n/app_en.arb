@@ -15,24 +15,41 @@
 
   "navHome": "Home",
   "navLive": "Live",
+  "navOnDemand": "On Demand",
   "navRadio": "Radio",
   "navAbout": "About",
 
   "tabTitleHome": "HOME",
   "tabTitleLive": "LIVE",
+  "tabTitleOnDemand": "ON DEMAND",
   "tabTitleRadio": "RADIO",
   "tabTitleAbout": "ABOUT FNDTV",
 
   "tabSubtitleHome": "Welcome to FNDTV",
   "tabSubtitleLive": "Watch FNDTV Live Channels",
+  "tabSubtitleOnDemand": "Movies and shows on demand",
   "tabSubtitleRadio": "Listen to FNDTV Radio",
 
   "selectLanguage": "Select language",
+
+  "navUpdates": "Updates",
+  "updatesChecking": "Checking for updates…",
+  "updatesUpToDate": "You're on the latest version",
+  "updatesAvailable": "Update available",
+  "updatesUnavailable": "Couldn't check for updates",
+  "updatesDownload": "Download update",
+  "updatesRetry": "Retry",
+  "updatesDownloading": "Downloading…",
+  "updatesDownloaded": "Download complete",
+  "updatesInstall": "Install",
+  "updatesInstalling": "Installing…",
+  "navMenu": "Menu",
 
   "sectionLiveNow": "Live now",
   "sectionChicagoTime": "Chicago time",
   "sectionRadio": "Radio",
   "sectionLiveTv": "Live TV",
+  "sectionOnDemand": "On Demand",
 
   "badgeLive": "LIVE",
   "badgeUsTime": "US TIME",
@@ -58,6 +75,7 @@
   "aboutDonatePrompt": "Help FNDTV keep broadcasting. Tap below to donate:",
   "donate": "Donate",
   "donationOpenError": "Could not open the donation page",
+  "donateScanHint": "Scan this code with your phone to donate",
 
   "settingsBlueTheme": "Blue Theme",
   "settingsDarkTheme": "Dark Theme"

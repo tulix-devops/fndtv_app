@@ -246,7 +246,7 @@ class LivePosterTile extends StatelessWidget {
                   ),
                 ),
                 Positioned(
-                  top: 12,
+                  bottom: 12,
                   left: 12,
                   child: StatusPill(
                       text: badge ?? context.l.badgeLive, icon: Icons.circle),

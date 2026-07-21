@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Kiosk / set-top box extras (merged on top of the main manifest) -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Runs on Android TV; leanback optional so it also installs on plain boxes -->
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false" />
+
+    <application>
+
+        <!-- Make MainActivity the TV/home launcher so only this app is shown.
+             singleTask so pressing Home returns to the existing instance. -->
+        <activity
+            android:name=".MainActivity"
+            android:launchMode="singleTask"
+            tools:replace="android:launchMode">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Self-update (OTA) entry point -->
+        <activity
+            android:name=".UpgradeActivity"
+            android:exported="false" />
+
+        <!-- Boot-time startup work -->
+        <service
+            android:name=".StartupService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="shortService" />
+
+        <!-- Auto-launch the app when the box finishes booting -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Device admin for kiosk / lockdown policies -->
+        <receiver
+            android:name=".MyDeviceAdminReceiver"
+            android:label="Device Admin"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:exported="true">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin_rules" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- FileProvider (${applicationId}.provider) is declared in the main
+             manifest so it's available to every flavor. -->
+
+    </application>
+</manifest>

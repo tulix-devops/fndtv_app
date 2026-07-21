@@ -1,5 +1,8 @@
 const String _url = 'https://fnd.dineo.uk/api';
 
+/// Separate backend host for set-top box provisioning (device registration).
+const String _boxUrl = 'https://box.dineo.uk/api';
+
 class APIList {
   APIList._();
 
@@ -21,6 +24,21 @@ class APIList {
     final base = '$_url/content/$contentType/$id';
     return date != null ? '$base?date=$date' : base;
   }
+
+  /// Operator login on the box host. POST `{ email, password }` → 200 with a
+  /// `tulix_session` cookie (HttpOnly) that authorises device registration.
+  static String get operatorLogin => '$_boxUrl/auth/login';
+
+  /// Registers this set-top box on app init. POST body:
+  /// `{ serial_number, mac_wifi, os_version }` with the operator session cookie.
+  /// Returns 201 on success, 409 if the box is already registered.
+  static String get registerDevice => '$_boxUrl/device/register';
+
+  /// Checks whether the box needs a newer app build. GET by device id (the UUID
+  /// from registration) with the operator session cookie → returns the latest
+  /// version, an `update_required` flag, and (if so) the APK URL + SHA-256.
+  static String deviceUpdate(String deviceId) =>
+      '$_boxUrl/device/$deviceId/update';
 
   // Auth endpoints
   static String get login => '$_url/auth/login';

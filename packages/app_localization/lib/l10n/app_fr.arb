@@ -15,24 +15,41 @@
 
   "navHome": "Accueil",
   "navLive": "Direct",
+  "navOnDemand": "À la demande",
   "navRadio": "Radio",
   "navAbout": "À propos",
 
   "tabTitleHome": "ACCUEIL",
   "tabTitleLive": "DIRECT",
+  "tabTitleOnDemand": "À LA DEMANDE",
   "tabTitleRadio": "RADIO",
   "tabTitleAbout": "À PROPOS DE FNDTV",
 
   "tabSubtitleHome": "Bienvenue sur FNDTV",
   "tabSubtitleLive": "Regardez les chaînes FNDTV en direct",
+  "tabSubtitleOnDemand": "Films et émissions à la demande",
   "tabSubtitleRadio": "Écoutez la radio FNDTV",
 
   "selectLanguage": "Choisir la langue",
+
+  "navUpdates": "Mises à jour",
+  "updatesChecking": "Recherche de mises à jour…",
+  "updatesUpToDate": "Vous avez la dernière version",
+  "updatesAvailable": "Mise à jour disponible",
+  "updatesUnavailable": "Impossible de vérifier les mises à jour",
+  "updatesDownload": "Télécharger la mise à jour",
+  "updatesRetry": "Réessayer",
+  "updatesDownloading": "Téléchargement…",
+  "updatesDownloaded": "Téléchargement terminé",
+  "updatesInstall": "Installer",
+  "updatesInstalling": "Installation…",
+  "navMenu": "Menu",
 
   "sectionLiveNow": "En direct",
   "sectionChicagoTime": "Heure de Chicago",
   "sectionRadio": "Radio",
   "sectionLiveTv": "TV en direct",
+  "sectionOnDemand": "À la demande",
 
   "badgeLive": "DIRECT",
   "badgeUsTime": "HEURE US",
@@ -58,6 +75,7 @@
   "aboutDonatePrompt": "Aidez FNDTV à continuer d’émettre. Touchez ci-dessous pour faire un don :",
   "donate": "Faire un don",
   "donationOpenError": "Impossible d’ouvrir la page de don",
+  "donateScanHint": "Scannez ce code avec votre téléphone pour faire un don",
 
   "settingsBlueTheme": "Thème bleu",
   "settingsDarkTheme": "Thème sombre"

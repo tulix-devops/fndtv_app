@@ -61,6 +61,25 @@ android {
             // )
         }
     }
+
+    // `normal` = the regular app. `stb` = the set-top box kiosk build, whose
+    // home-launcher manifest + native components live in src/stb/, so ordinary
+    // (dev/emulator) builds are never turned into a launcher.
+    // NOTE: once flavors exist Flutter requires --flavor, e.g.
+    //   flutter run        --flavor normal
+    //   flutter build apk  --flavor stb --release
+    flavorDimensions += "target"
+    productFlavors {
+        create("normal") {
+            dimension = "target"
+            isDefault = true
+        }
+        create("stb") {
+            dimension = "target"
+            // Same applicationId + signing as normal, so device registration and
+            // release signing carry over unchanged.
+        }
+    }
 }
 
 flutter {

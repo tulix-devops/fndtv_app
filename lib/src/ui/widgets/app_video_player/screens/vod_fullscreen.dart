@@ -32,23 +32,21 @@ class VodFullScreen extends StatefulWidget {
 class _VodFullScreenState extends State<VodFullScreen> {
   late final FocusNode playPauseFocus;
   late final FocusNode arrowBackFocus;
-  late final FocusNode _archiveBtnFocus;
+
+  /// Focus target for the schedule sheet itself — holds focus while the list
+  /// loads (so the Back key routes to it) before the first card autofocuses.
+  late final FocusNode _scheduleFocus;
 
   ({int selectedPage, int selectedItemIndex})? selectedLinkIndexes;
 
   bool isSeasonsOpen = false;
 
-  // ── DVR state ──────────────────────────────────────────────────────────────
-  DateTime _selectedDate = DateTime.now();
+  // ── Schedule state ───────────────────────────────────────────────────────
+  // Only today's schedule is shown, so the date is fixed to now.
+  final DateTime _selectedDate = DateTime.now();
   List<LiveModel> _programs = [];
   bool _dvrLoading = false;
   bool _dvrError = false;
-
-  List<DateTime> get _dvrDates {
-    final today =
-        DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-    return List.generate(8, (i) => today.subtract(Duration(days: 7 - i)));
-  }
 
   void _openDvr() {
     setState(() {
@@ -60,7 +58,7 @@ class _VodFullScreenState extends State<VodFullScreen> {
     context.read<VideoPlayerCubit>().handleVisibility(forceVisible: true);
     _fetchDvr();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) arrowBackFocus.requestFocus();
+      if (mounted) _scheduleFocus.requestFocus();
     });
   }
 
@@ -100,13 +98,30 @@ class _VodFullScreenState extends State<VodFullScreen> {
 
   @override
   void initState() {
-    _archiveBtnFocus = FocusNode();
+    _scheduleFocus = FocusNode();
     playPauseFocus = FocusNode(
       onKeyEvent: (node, event) {
         bool isInitialized = widget.controller.value.isInitialized;
         if (event is KeyDownEvent || event is KeyRepeatEvent) {
           final Duration currentPosition = widget.controller.value.position;
-          context.read<VideoPlayerCubit>().handleVisibility();
+          final cubit = context.read<VideoPlayerCubit>();
+          final bool wasVisible = cubit.state.isVisible;
+
+          // Down first reveals the controls (and the schedule hint). Only once
+          // the controls are already showing does another Down open the
+          // schedule sheet — so the first press never jumps straight into it.
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.arrowDown) {
+            if (!wasVisible) {
+              cubit.handleVisibility(forceVisible: true);
+            } else if (widget.contentType == ContentType.television &&
+                !isSeasonsOpen) {
+              _openDvr();
+            }
+            return KeyEventResult.handled;
+          }
+
+          cubit.handleVisibility();
 
           if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
               event.logicalKey == LogicalKeyboardKey.mediaRewind &&
@@ -147,10 +162,6 @@ class _VodFullScreenState extends State<VodFullScreen> {
           playPauseFocus.requestFocus();
           return KeyEventResult.handled;
         }
-        if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-          _archiveBtnFocus.requestFocus();
-          return KeyEventResult.handled;
-        }
         if (event.logicalKey == LogicalKeyboardKey.enter ||
             event.logicalKey == LogicalKeyboardKey.select) {
           context.pop();
@@ -165,7 +176,7 @@ class _VodFullScreenState extends State<VodFullScreen> {
 
   @override
   void dispose() {
-    _archiveBtnFocus.dispose();
+    _scheduleFocus.dispose();
     arrowBackFocus.dispose();
     playPauseFocus.dispose();
     super.dispose();
@@ -192,10 +203,16 @@ class _VodFullScreenState extends State<VodFullScreen> {
         if (!isSeasonsOpen) playPauseFocus.requestFocus();
       },
       builder: (context, state) {
+        // The schedule (DVR archive) only applies to live TV — not radio or VOD.
+        final isLiveTv = widget.contentType == ContentType.television;
+        // On-demand (VOD) content has a fixed duration, so it gets a scrub bar.
+        final isVod = widget.contentType == ContentType.dvr;
         return Stack(
           alignment: Alignment.center,
           children: [
-            if (state.isVisible) const BlackBackground(),
+            // Keep the video undimmed while the schedule sheet is open so the
+            // layout behind it stays readable.
+            if (state.isVisible && !isSeasonsOpen) const BlackBackground(),
             if (!isSeasonsOpen) ...[
               Positioned(
                 left: 60,
@@ -204,14 +221,6 @@ class _VodFullScreenState extends State<VodFullScreen> {
                   onPressed: (ctx) => context.pop(),
                   icon: Assets.arrowLeft,
                   focusNode: arrowBackFocus,
-                ),
-              ),
-              Positioned(
-                right: 20,
-                top: 20,
-                child: _ArchiveButton(
-                  onTap: _openDvr,
-                  focusNode: _archiveBtnFocus,
                 ),
               ),
               Positioned(
@@ -232,18 +241,42 @@ class _VodFullScreenState extends State<VodFullScreen> {
                   ],
                 ),
               ),
+              // Bottom hint that a schedule is available — press Down to open.
+              // Live TV only (radio and VOD have no schedule).
+              if (isLiveTv && state.isVisible)
+                const Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 14,
+                  child: IgnorePointer(child: _ScheduleHint()),
+                ),
+              // VOD progress / scrub bar — rewind & fast-forward with ◀ / ▶.
+              if (isVod && state.isVisible)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 18,
+                  child: getVodSeekbar(context),
+                ),
             ],
-            if (isSeasonsOpen) _buildDvrOverlay(context),
+            if (isSeasonsOpen) _buildScheduleSheet(context),
           ],
         );
       },
     );
   }
 
-  Widget _buildDvrOverlay(BuildContext context) {
+  /// Bottom sheet listing today's schedule as a horizontal strip of picture
+  /// cards. The video stays visible above it.
+  Widget _buildScheduleSheet(BuildContext context) {
     final colors = context.uiKitColors;
-    return Positioned.fill(
-      child: FocusScope(
+    final sheetHeight = MediaQuery.of(context).size.height * 0.5;
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Focus(
+        focusNode: _scheduleFocus,
         onKeyEvent: (node, event) {
           if (event is KeyDownEvent &&
               event.logicalKey == LogicalKeyboardKey.goBack) {
@@ -254,95 +287,63 @@ class _VodFullScreenState extends State<VodFullScreen> {
         },
         child: FocusTraversalGroup(
           policy: ReadingOrderTraversalPolicy(),
-          child: Row(
-            children: [
-              // Left tap-to-close area
-              Expanded(
-                flex: 4,
-                child: GestureDetector(
-                  onTap: _closeDvr,
-                  child: Container(color: Colors.black.withValues(alpha: 0.55)),
-                ),
+          child: Container(
+            height: sheetHeight,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.6),
+                  Colors.black.withValues(alpha: 0.94),
+                ],
+                stops: const [0, 0.28, 1],
               ),
-              // Right panel
-              Expanded(
-                flex: 6,
-                child: Container(
-                  color: const Color(0xFF1A1A1A),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Panel header
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.video_library_rounded,
-                                color: Color(0xFFA83734), size: 20),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Archive',
-                              style: GoogleFonts.sora(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const Spacer(),
-                            IconButton(
-                              focusNode: arrowBackFocus,
-                              icon: const Icon(Icons.close_rounded,
-                                  color: Colors.white70),
-                              onPressed: _closeDvr,
-                            ),
-                          ],
+            ),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  const Spacer(),
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(48, 8, 40, 8),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_month_rounded,
+                            color: Color(0xFFA83734), size: 22),
+                        const SizedBox(width: 10),
+                        Text(
+                          "Today's Schedule",
+                          style: GoogleFonts.sora(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                      // Date chips
-                      SizedBox(
-                        height: 42,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: _dvrDates.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 8),
-                          itemBuilder: (context, i) {
-                            final date = _dvrDates[i];
-                            final isSelected = _isSameDay(date, _selectedDate);
-                            return _DvrDateChip(
-                              date: date,
-                              isSelected: isSelected,
-                              onTap: () {
-                                if (!isSelected) {
-                                  setState(() {
-                                    _selectedDate = date;
-                                    _dvrLoading = true;
-                                    _dvrError = false;
-                                    _programs = [];
-                                  });
-                                  _fetchDvr();
-                                }
-                              },
-                            );
-                          },
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                              color: Colors.white70, size: 28),
+                          onPressed: _closeDvr,
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      const Divider(color: Colors.white12, height: 1),
-                      // Program list
-                      Expanded(child: _buildDvrProgramList(colors)),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                  SizedBox(height: 200, child: _buildScheduleList(colors)),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildDvrProgramList(UiKitColors colors) {
+  Widget _buildScheduleList(UiKitColors colors) {
     if (_dvrLoading) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFFA83734)),
@@ -353,11 +354,11 @@ class _VodFullScreenState extends State<VodFullScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, color: Colors.white38, size: 36),
+            const Icon(Icons.error_outline, color: Colors.white38, size: 34),
+            const SizedBox(height: 8),
+            Text('Could not load schedule',
+                style: GoogleFonts.sora(color: Colors.white54, fontSize: 14)),
             const SizedBox(height: 10),
-            Text('Could not load programs',
-                style: GoogleFonts.sora(color: Colors.white54, fontSize: 13)),
-            const SizedBox(height: 12),
             TextButton(
               onPressed: () {
                 setState(() {
@@ -374,32 +375,37 @@ class _VodFullScreenState extends State<VodFullScreen> {
     }
     if (_programs.isEmpty) {
       return Center(
-        child: Text('No programs available',
-            style: GoogleFonts.sora(color: Colors.white38, fontSize: 13)),
+        child: Text('No programs today',
+            style: GoogleFonts.sora(color: Colors.white38, fontSize: 14)),
       );
     }
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(48, 6, 48, 18),
       itemCount: _programs.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, __) => const SizedBox(width: 16),
       itemBuilder: (context, i) {
         final program = _programs[i];
-        return _DvrProgramRow(
-          program: program,
-          onTap: () {
-            final link = program.sources.getPreferredVideoSource() ?? '';
-            if (link.isNotEmpty) {
-              widget.updateVideoController(link);
-            }
-            _closeDvr();
-          },
+        return SizedBox(
+          width: 240,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: _DvrProgramCard(
+              program: program,
+              autofocus: i == 0,
+              onTap: () {
+                final link = program.sources.getPreferredVideoSource() ?? '';
+                if (link.isNotEmpty) {
+                  widget.updateVideoController(link);
+                }
+                _closeDvr();
+              },
+            ),
+          ),
         );
       },
     );
   }
-
-  static bool _isSameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
 
   Widget getVodSeekbar(BuildContext context) {
     return ValueListenableBuilder<VideoPlayerValue>(
@@ -433,109 +439,66 @@ class _VodFullScreenState extends State<VodFullScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ARCHIVE BUTTON
+// SCHEDULE HINT  (bottom "press down" affordance)
 // ═══════════════════════════════════════════════════════════════════════════
 
-class _ArchiveButton extends StatelessWidget {
-  final VoidCallback onTap;
-  final FocusNode focusNode;
-
-  const _ArchiveButton({required this.onTap, required this.focusNode});
+/// A subtle non-interactive hint centered at the bottom of the player: the word
+/// "Schedule" over a gently bobbing down-chevron, telling the viewer to press
+/// Down to reveal the schedule.
+class _ScheduleHint extends StatefulWidget {
+  const _ScheduleHint();
 
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.black.withValues(alpha: 0.55),
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        focusNode: focusNode,
-        borderRadius: BorderRadius.circular(10),
-        focusColor: Colors.white.withValues(alpha: 0.2),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.video_library_rounded,
-                  color: Colors.white, size: 18),
-              const SizedBox(width: 7),
-              Text(
-                'Archive',
-                style: GoogleFonts.sora(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  State<_ScheduleHint> createState() => _ScheduleHintState();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// DVR DATE CHIP
-// ═══════════════════════════════════════════════════════════════════════════
+class _ScheduleHintState extends State<_ScheduleHint>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _bob;
 
-class _DvrDateChip extends StatelessWidget {
-  final DateTime date;
-  final bool isSelected;
-  final VoidCallback onTap;
+  @override
+  void initState() {
+    super.initState();
+    _bob = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+  }
 
-  const _DvrDateChip(
-      {required this.date, required this.isSelected, required this.onTap});
-
-  String get _label {
-    final today = DateTime.now();
-    if (date.year == today.year &&
-        date.month == today.month &&
-        date.day == today.day) return 'Today';
-    final yesterday = today.subtract(const Duration(days: 1));
-    if (date.year == yesterday.year &&
-        date.month == yesterday.month &&
-        date.day == yesterday.day) return 'Yesterday';
-    return DateFormat('EEE d').format(date);
+  @override
+  void dispose() {
+    _bob.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      focusColor: Colors.transparent,
-      child: Builder(builder: (context) {
-        final hasFocus = Focus.of(context).hasFocus;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? const Color(0xFFA83734)
-                : hasFocus
-                    ? Colors.white.withValues(alpha: 0.2)
-                    : Colors.white.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isSelected || hasFocus
-                  ? const Color(0xFFA83734)
-                  : Colors.white.withValues(alpha: 0.15),
-              width: hasFocus ? 2 : 1,
-            ),
-          ),
-          child: Text(
-            _label,
+    final color = Colors.white.withValues(alpha: 0.85);
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Schedule',
             style: GoogleFonts.sora(
-              color: isSelected || hasFocus ? Colors.white : Colors.white70,
-              fontSize: 12,
-              fontWeight:
-                  isSelected || hasFocus ? FontWeight.w700 : FontWeight.w500,
+              color: color,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
             ),
           ),
-        );
-      }),
+          const SizedBox(height: 1),
+          AnimatedBuilder(
+            animation: _bob,
+            builder: (context, child) => Transform.translate(
+              offset: Offset(0, _bob.value * 4),
+              child: child,
+            ),
+            child: Icon(Icons.keyboard_arrow_down_rounded,
+                color: color, size: 26),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -553,100 +516,205 @@ String _dvrFmtTime(String? iso) {
   }
 }
 
-class _DvrProgramRow extends StatelessWidget {
+class _DvrProgramCard extends StatefulWidget {
   final LiveModel program;
   final VoidCallback onTap;
+  final bool autofocus;
 
-  const _DvrProgramRow({required this.program, required this.onTap});
+  const _DvrProgramCard({
+    required this.program,
+    required this.onTap,
+    this.autofocus = false,
+  });
+
+  @override
+  State<_DvrProgramCard> createState() => _DvrProgramCardState();
+}
+
+class _DvrProgramCardState extends State<_DvrProgramCard> {
+  final FocusNode _node = FocusNode();
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _node.addListener(_onFocus);
+  }
+
+  void _onFocus() {
+    if (!mounted) return;
+    setState(() => _focused = _node.hasFocus);
+    if (_node.hasFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          Scrollable.ensureVisible(context,
+              alignment: 0.5, duration: const Duration(milliseconds: 260));
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _node.removeListener(_onFocus);
+    _node.dispose();
+    super.dispose();
+  }
+
+  bool get _isCurrent {
+    final s = widget.program.startsAt, e = widget.program.endsAt;
+    if (s == null || s.isEmpty || e == null || e.isEmpty) return false;
+    try {
+      final now = DateTime.now();
+      final st = DateTime.parse(s).toLocal();
+      final en = DateTime.parse(e).toLocal();
+      return !now.isBefore(st) && now.isBefore(en);
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final start = _dvrFmtTime(program.startsAt);
-    final end = _dvrFmtTime(program.endsAt);
+    const accent = Color(0xFFA83734);
+    final start = _dvrFmtTime(widget.program.startsAt);
+    final end = _dvrFmtTime(widget.program.endsAt);
     final timeRange = end.isEmpty ? start : '$start – $end';
+    final thumb = widget.program.images.getThumbnail();
+    final hasThumb = thumb.startsWith('http');
+    final isCurrent = _isCurrent;
 
-    final now = DateTime.now();
-    final isCurrent = () {
-      final s = program.startsAt, e = program.endsAt;
-      if (s == null || s.isEmpty || e == null || e.isEmpty) return false;
-      try {
-        final st = DateTime.parse(s).toLocal();
-        final en = DateTime.parse(e).toLocal();
-        return !now.isBefore(st) && now.isBefore(en);
-      } catch (_) {
-        return false;
-      }
-    }();
-
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        focusColor: Colors.transparent,
-        onTap: onTap,
-        child: Builder(builder: (context) {
-          final isFocused = Focus.of(context).hasFocus;
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: isFocused
-                  ? Colors.white.withValues(alpha: 0.15)
-                  : isCurrent
-                      ? const Color(0xFFA83734).withValues(alpha: 0.25)
-                      : Colors.white.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isFocused
-                    ? Colors.white.withValues(alpha: 0.7)
-                    : isCurrent
-                        ? const Color(0xFFA83734).withValues(alpha: 0.6)
-                        : Colors.white.withValues(alpha: 0.08),
-                width: isFocused ? 2 : 1,
+    return InkWell(
+      focusNode: _node,
+      autofocus: widget.autofocus,
+      onTap: widget.onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 150),
+        scale: _focused ? 1.04 : 1.0,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: _focused
+                      ? accent
+                      : (isCurrent
+                          ? accent.withValues(alpha: 0.6)
+                          : Colors.white24),
+                  width: _focused ? 3 : 1,
+                ),
+                boxShadow: _focused
+                    ? [
+                        BoxShadow(
+                          color: accent.withValues(alpha: 0.5),
+                          blurRadius: 22,
+                          spreadRadius: 1,
+                        ),
+                      ]
+                    : null,
               ),
-            ),
-            child: Row(
-              children: [
-                if (timeRange.isNotEmpty) ...[
-                  SizedBox(
-                    width: 90,
-                    child: Text(
-                      timeRange,
-                      style: GoogleFonts.sora(
-                        color: isCurrent
-                            ? const Color(0xFFFF8A8A)
-                            : Colors.white54,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  Container(
-                      width: 1,
-                      height: 28,
-                      color: Colors.white12,
-                      margin: const EdgeInsets.symmetric(horizontal: 10)),
-                ],
-                Expanded(
-                  child: Text(
-                    program.title,
-                    style: GoogleFonts.sora(
-                      color: isCurrent ? Colors.white : Colors.white70,
-                      fontSize: 13,
-                      fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(11),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (hasThumb)
+                        Image.network(
+                          thumb,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _placeholder,
+                        )
+                      else
+                        _placeholder,
+                      // Time badge
+                      if (timeRange.isNotEmpty)
+                        Positioned(
+                          top: 8,
+                          left: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.6),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              timeRange,
+                              style: GoogleFonts.sora(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      // Live now badge
+                      if (isCurrent)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: accent,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'LIVE',
+                              style: GoogleFonts.sora(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      // Play affordance on focus
+                      if (_focused)
+                        Center(
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: const BoxDecoration(
+                              color: accent,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.play_arrow_rounded,
+                                color: Colors.white, size: 28),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                const Icon(Icons.play_circle_outline_rounded,
-                    color: Colors.white38, size: 20),
-              ],
+              ),
             ),
-          );
-        }),
+            const SizedBox(height: 8),
+            Text(
+              widget.program.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.sora(
+                color: _focused ? Colors.white : Colors.white70,
+                fontSize: 13,
+                fontWeight: _focused ? FontWeight.w700 : FontWeight.w500,
+                height: 1.2,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
+
+  Widget get _placeholder => Container(
+        color: const Color(0xFF23252B),
+        child: const Icon(Icons.live_tv_rounded, color: Colors.white24, size: 40),
+      );
 }

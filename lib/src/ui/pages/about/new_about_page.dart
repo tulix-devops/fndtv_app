@@ -1,9 +1,11 @@
+import 'package:commons/commons.dart';
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:app_localization/app_localization.dart';
 import 'package:fndtv/src/core/constants/fndtv_channels.dart';
+import 'package:fndtv/src/ui/pages/about/tv_about_page.dart';
 import 'package:ui_kit/ui_kit.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -71,6 +73,9 @@ class NewAboutPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (context.isTv) {
+      return TvAboutPage(language: language);
+    }
     final colors = context.uiKitColors;
     final l = context.l;
     final intro = [

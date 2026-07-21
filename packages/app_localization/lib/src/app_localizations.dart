@@ -178,6 +178,12 @@ abstract class AppLocalizations {
   /// **'Live'**
   String get navLive;
 
+  /// No description provided for @navOnDemand.
+  ///
+  /// In en, this message translates to:
+  /// **'On Demand'**
+  String get navOnDemand;
+
   /// No description provided for @navRadio.
   ///
   /// In en, this message translates to:
@@ -201,6 +207,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'LIVE'**
   String get tabTitleLive;
+
+  /// No description provided for @tabTitleOnDemand.
+  ///
+  /// In en, this message translates to:
+  /// **'ON DEMAND'**
+  String get tabTitleOnDemand;
 
   /// No description provided for @tabTitleRadio.
   ///
@@ -226,6 +238,12 @@ abstract class AppLocalizations {
   /// **'Watch FNDTV Live Channels'**
   String get tabSubtitleLive;
 
+  /// No description provided for @tabSubtitleOnDemand.
+  ///
+  /// In en, this message translates to:
+  /// **'Movies and shows on demand'**
+  String get tabSubtitleOnDemand;
+
   /// No description provided for @tabSubtitleRadio.
   ///
   /// In en, this message translates to:
@@ -237,6 +255,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Select language'**
   String get selectLanguage;
+
+  /// No description provided for @navUpdates.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates'**
+  String get navUpdates;
+
+  /// No description provided for @updatesChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for updates…'**
+  String get updatesChecking;
+
+  /// No description provided for @updatesUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re on the latest version'**
+  String get updatesUpToDate;
+
+  /// No description provided for @updatesAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available'**
+  String get updatesAvailable;
+
+  /// No description provided for @updatesUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t check for updates'**
+  String get updatesUnavailable;
+
+  /// No description provided for @updatesDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download update'**
+  String get updatesDownload;
+
+  /// No description provided for @updatesRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get updatesRetry;
+
+  /// No description provided for @updatesDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading…'**
+  String get updatesDownloading;
+
+  /// No description provided for @updatesDownloaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Download complete'**
+  String get updatesDownloaded;
+
+  /// No description provided for @updatesInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Install'**
+  String get updatesInstall;
+
+  /// No description provided for @updatesInstalling.
+  ///
+  /// In en, this message translates to:
+  /// **'Installing…'**
+  String get updatesInstalling;
+
+  /// No description provided for @navMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu'**
+  String get navMenu;
 
   /// No description provided for @sectionLiveNow.
   ///
@@ -261,6 +351,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Live TV'**
   String get sectionLiveTv;
+
+  /// No description provided for @sectionOnDemand.
+  ///
+  /// In en, this message translates to:
+  /// **'On Demand'**
+  String get sectionOnDemand;
 
   /// No description provided for @badgeLive.
   ///
@@ -387,6 +483,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not open the donation page'**
   String get donationOpenError;
+
+  /// No description provided for @donateScanHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan this code with your phone to donate'**
+  String get donateScanHint;
 
   /// No description provided for @settingsBlueTheme.
   ///
