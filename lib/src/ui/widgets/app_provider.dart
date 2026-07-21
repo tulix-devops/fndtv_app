@@ -6,8 +6,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:local_storage/local_storage.dart';
 import 'package:fndtv/src/bloc/bloc.dart';
+import 'package:fndtv/src/bloc/network_cubit/network_cubit.dart';
 import 'package:fndtv/src/bloc/theme_cubit/theme_cubit.dart';
 import 'package:fndtv/src/core/core.dart';
+import 'package:fndtv/src/core/services/connectivity_observer.dart';
+import 'package:fndtv/src/core/services/stb_network_service.dart';
 import 'package:fndtv/src/data/data_sources/device/device_data_source.dart';
 import 'package:fndtv/src/data/repositories/device/device_repository.dart';
 import 'package:ui_kit/ui_kit.dart';
@@ -121,6 +124,23 @@ class AppBlocProvider extends StatelessWidget {
         ),
         BlocProvider<ThemeCubit>(
           create: (context) => ThemeCubit(),
+        ),
+        // STB network manager — observer + status live for the whole app run.
+        BlocProvider<NetworkCubit>(
+          lazy: false,
+          create: (ctx) {
+            final stb = StbSystemService();
+            final cubit = NetworkCubit(
+              service: StbNetworkService(),
+              observer: ConnectivityObserver(),
+              // Degrade to status-only when the box has neither device-owner
+              // nor root (spec: error handling).
+              checkManageable: () async =>
+                  await stb.isDeviceOwner() || await stb.isRootAvailable(),
+            );
+            if (StbSystemService.isStb) cubit.refreshStatus();
+            return cubit;
+          },
         ),
       ],
       child: BlocListener<AppCubit, AppState>(
