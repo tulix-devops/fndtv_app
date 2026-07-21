@@ -34,17 +34,28 @@ import java.util.concurrent.Executors
  * the `stb` flavor); the `normal` flavor never loads it. Backs the
  * `com.fndtv.videoplayer/stb` MethodChannel consumed by Dart's StbSystemService.
  *
- * Covers §8 device/network info, §7 timezone sync, §6 power (sleep/reboot), and
- * §1 kiosk (device-owner, default-launcher, unwanted-app removal, ADB-TCP).
- * The kiosk/power/timezone-apply features require **root + device-owner** and
- * only take effect on the real box, not the emulator.
+ * Covers §8 device/network info, §7 timezone sync, §6 power (sleep/reboot),
+ * §1 kiosk (device-owner, default-launcher, unwanted-app removal, ADB-TCP), and
+ * a network-manager surface (Wi-Fi status/scan/join/toggle, Ethernet status)
+ * built on device-owner WifiManager APIs with root-shell (`cmd wifi`/`svc wifi`)
+ * fallback. The kiosk/power/timezone-apply features require **root +
+ * device-owner** and only take effect on the real box, not the emulator.
  */
 class StbBridge(private val context: Context) {
 
     private val tag = "StbBridge"
     private val channelName = "com.fndtv.videoplayer/stb"
     private val io = Executors.newSingleThreadExecutor()
+    // Network calls (scanWifi's ~2.5-5s scan wait, connectWifi) block for long
+    // stretches; a dedicated executor keeps them off `io` so they can't stall
+    // reboot/sleep/kiosk calls or a concurrent wifiStatus poll queued behind them.
+    private val netIo = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
+
+    /** Methods dispatched to [netIo] instead of [io]; see its comment. */
+    private val networkMethods = setOf(
+        "wifiStatus", "ethernetStatus", "scanWifi", "connectWifi", "setWifiEnabled"
+    )
 
     private val adbTcpAllowedUsers = setOf("admin", "developer")
     private val adbTcpPortProperties = listOf(
@@ -61,60 +72,66 @@ class StbBridge(private val context: Context) {
 
     private fun handle(call: MethodCall, result: MethodChannel.Result) {
         // Everything here does blocking IO (sysfs, /proc, network, `su`), so run
-        // off the platform thread and post the reply back.
-        io.execute {
-            val reply: Any? = try {
-                when (call.method) {
-                    // §8 device / network info
-                    "ipAddress" -> getIpAddress()
-                    "macAddress" -> getMacAddress()
-                    "cpuSerial" -> getCpuSerial()
-                    "connectionType" -> getConnectionType()
-                    "isRootAvailable" -> isRootAvailable()
-                    // network manager
-                    "wifiStatus" -> wifiStatus()
-                    "ethernetStatus" -> ethernetStatus()
-                    "scanWifi" -> scanWifi()
-                    "connectWifi" -> connectWifi(
-                        call.argument<String>("ssid") ?: "",
-                        call.argument<String>("password")
+        // off the platform thread and post the reply back. Network methods run
+        // on their own executor (see `netIo`) so a scan/connect can't stall
+        // reboot/sleep/kiosk calls, or a concurrent wifiStatus poll, queued
+        // behind it on `io`.
+        val executor = if (call.method in networkMethods) netIo else io
+        executor.execute { dispatch(call, result) }
+    }
+
+    private fun dispatch(call: MethodCall, result: MethodChannel.Result) {
+        val reply: Any? = try {
+            when (call.method) {
+                // §8 device / network info
+                "ipAddress" -> getIpAddress()
+                "macAddress" -> getMacAddress()
+                "cpuSerial" -> getCpuSerial()
+                "connectionType" -> getConnectionType()
+                "isRootAvailable" -> isRootAvailable()
+                // network manager
+                "wifiStatus" -> wifiStatus()
+                "ethernetStatus" -> ethernetStatus()
+                "scanWifi" -> scanWifi()
+                "connectWifi" -> connectWifi(
+                    call.argument<String>("ssid") ?: "",
+                    call.argument<String>("password")
+                )
+                "setWifiEnabled" -> setWifiEnabled(call.argument<Boolean>("enabled") ?: true)
+                // §7 timezone
+                "syncTimezone" -> syncTimezone()
+                // §6 power
+                "sleep" -> sleep()
+                "reboot" -> reboot()
+                // §1 kiosk
+                "isDeviceOwner" -> isDeviceOwner()
+                "defaultLauncher" -> defaultLauncher()
+                "setDefaultLauncher" -> setDefaultLauncher()
+                "setupDeviceOwner" -> setupDeviceOwner()
+                "uninstallPackages" ->
+                    uninstallPackages(call.argument<List<String>>("packages") ?: emptyList())
+                "disableComponent" ->
+                    disableComponent(call.argument<String>("component") ?: "")
+                "disablePackage" ->
+                    disablePackage(call.argument<String>("package") ?: "")
+                "configureAdbTcp" -> configureAdbTcp(call.argument<String>("user"))
+                "runStartupMaintenance" ->
+                    runStartupMaintenance(
+                        call.argument<List<String>>("unwantedApps") ?: emptyList(),
+                        call.argument<List<String>>("disabledComponents") ?: emptyList(),
+                        call.argument<List<String>>("disabledPackages") ?: emptyList()
                     )
-                    "setWifiEnabled" -> setWifiEnabled(call.argument<Boolean>("enabled") ?: true)
-                    // §7 timezone
-                    "syncTimezone" -> syncTimezone()
-                    // §6 power
-                    "sleep" -> sleep()
-                    "reboot" -> reboot()
-                    // §1 kiosk
-                    "isDeviceOwner" -> isDeviceOwner()
-                    "defaultLauncher" -> defaultLauncher()
-                    "setDefaultLauncher" -> setDefaultLauncher()
-                    "setupDeviceOwner" -> setupDeviceOwner()
-                    "uninstallPackages" ->
-                        uninstallPackages(call.argument<List<String>>("packages") ?: emptyList())
-                    "disableComponent" ->
-                        disableComponent(call.argument<String>("component") ?: "")
-                    "disablePackage" ->
-                        disablePackage(call.argument<String>("package") ?: "")
-                    "configureAdbTcp" -> configureAdbTcp(call.argument<String>("user"))
-                    "runStartupMaintenance" ->
-                        runStartupMaintenance(
-                            call.argument<List<String>>("unwantedApps") ?: emptyList(),
-                            call.argument<List<String>>("disabledComponents") ?: emptyList(),
-                            call.argument<List<String>>("disabledPackages") ?: emptyList()
-                        )
-                    else -> NOT_IMPLEMENTED
-                }
-            } catch (t: Throwable) {
-                Log.e(tag, "method ${call.method} failed", t)
-                ERROR to t.message
+                else -> NOT_IMPLEMENTED
             }
-            main.post {
-                when (reply) {
-                    NOT_IMPLEMENTED -> result.notImplemented()
-                    is Pair<*, *> -> result.error(ERROR, reply.second as? String, null)
-                    else -> result.success(reply)
-                }
+        } catch (t: Throwable) {
+            Log.e(tag, "method ${call.method} failed", t)
+            ERROR to t.message
+        }
+        main.post {
+            when (reply) {
+                NOT_IMPLEMENTED -> result.notImplemented()
+                is Pair<*, *> -> result.error(ERROR, reply.second as? String, null)
+                else -> result.success(reply)
             }
         }
     }
@@ -512,7 +529,7 @@ class StbBridge(private val context: Context) {
     // ─── network manager (device-owner APIs primary, root shell fallback) ────
 
     private val wifi: WifiManager?
-        get() = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+        get() = context.getSystemService(Context.WIFI_SERVICE) as? WifiManager
 
     /** {enabled, ssid, ip} — ssid null when disconnected/unknown. */
     private fun wifiStatus(): Map<String, Any?> {
@@ -576,10 +593,11 @@ class StbBridge(private val context: Context) {
         if (results.isEmpty() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && isRootAvailable()) {
             // Header: "BSSID  Frequency  RSSI  Age(sec)  SSID  Flags"
             val out = runSuCapture("cmd wifi start-scan", "sleep 3", "cmd wifi list-scan-results").output
+            val lineRegex = Regex(
+                "^\\s*([0-9a-fA-F:]{17})\\s+\\S+\\s+(-?\\d+).*?\\s{2,}(\\S.*?)\\s{2,}(\\[.*)?$"
+            )
             for (line in out.lines().drop(1)) {
-                val m = Regex(
-                    "^\\s*([0-9a-fA-F:]{17})\\s+\\S+\\s+(-?\\d+).*?\\s{2,}(\\S.*?)\\s{2,}(\\[.*)?$"
-                ).find(line) ?: continue
+                val m = lineRegex.find(line) ?: continue
                 val rssi = m.groupValues[2].toIntOrNull() ?: continue
                 val ssid = m.groupValues[3].trim()
                 if (ssid.isBlank()) continue
