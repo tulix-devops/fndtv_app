@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fndtv/src/bloc/network_cubit/network_cubit.dart';
 import 'package:fndtv/src/core/services/connectivity_observer.dart';
@@ -23,6 +24,20 @@ class FakeNetworkService extends StbNetworkService {
 
   @override
   Future<bool> setWifiEnabled(bool enabled) async => true;
+}
+
+/// A status() call that only resolves once [release] completes, so a test can
+/// hold a refresh "in flight" while the cubit closes underneath it.
+class SlowNetworkService extends StbNetworkService {
+  SlowNetworkService(this.release);
+  final Completer<void> release;
+  StbNetworkStatus next = StbNetworkStatus.fromMaps();
+
+  @override
+  Future<StbNetworkStatus> status() async {
+    await release.future;
+    return next;
+  }
 }
 
 void main() {
@@ -82,5 +97,43 @@ void main() {
     cubit.suppressOverlay(false);
     expect(cubit.state.overlaySuppressed, isFalse);
     await cubit.close();
+  });
+
+  test('closing while an online-triggered refreshStatus is in flight does not throw', () async {
+    final release = Completer<void>();
+    final svc = SlowNetworkService(release)
+      ..next = StbNetworkStatus.fromMaps(
+        wifi: {'enabled': true, 'ssid': 'Home', 'ip': '10.0.0.2'},
+      );
+    final changes = StreamController<List<ConnectivityResult>>();
+    final observer = ConnectivityObserver(changes: changes.stream, probe: () async => true);
+    final cubit = NetworkCubit(
+      service: svc,
+      observer: observer,
+      joinPollInterval: const Duration(milliseconds: 10),
+      joinTimeout: const Duration(milliseconds: 50),
+    );
+
+    // Fire a connectivity change: observer probes (true) -> onlineStream
+    // emits true -> cubit's listener emits online + fires refreshStatus(),
+    // which is now blocked inside SlowNetworkService.status() on `release`.
+    changes.add([ConnectivityResult.wifi]);
+    // Let the microtask chain (probe -> _set -> broadcast -> listener ->
+    // refreshStatus -> status() -> suspends on release.future) settle.
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(cubit.state.online, isTrue);
+
+    // Close the cubit while the refreshStatus() call is still pending.
+    final closeFuture = cubit.close();
+
+    // Now let the pending status() resolve. Without the isClosed guard in
+    // refreshStatus() this throws StateError: Cannot emit new states after
+    // calling close.
+    release.complete();
+
+    await expectLater(closeFuture, completes);
+    await changes.close();
   });
 }

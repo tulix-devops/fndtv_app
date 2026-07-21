@@ -105,6 +105,7 @@ class NetworkCubit extends Cubit<NetworkState> {
 
   Future<void> refreshStatus() async {
     final s = await _service.status();
+    if (isClosed) return;
     emit(state.copyWith(
       wifiEnabled: s.wifiEnabled,
       ssid: () => s.ssid,
@@ -117,6 +118,7 @@ class NetworkCubit extends Cubit<NetworkState> {
   Future<void> scan() async {
     emit(state.copyWith(scanning: true));
     final networks = await _service.scan();
+    if (isClosed) return;
     emit(state.copyWith(scanning: false, networks: networks));
   }
 
@@ -125,6 +127,7 @@ class NetworkCubit extends Cubit<NetworkState> {
   Future<void> join(String ssid, {String? password}) async {
     emit(state.copyWith(joinPhase: NetworkJoinPhase.connecting, joiningSsid: () => ssid));
     final initiated = await _service.connect(ssid, password: password);
+    if (isClosed) return;
     if (!initiated) {
       emit(state.copyWith(joinPhase: NetworkJoinPhase.failed));
       return;
@@ -132,7 +135,9 @@ class NetworkCubit extends Cubit<NetworkState> {
     final deadline = DateTime.now().add(joinTimeout);
     while (DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(joinPollInterval);
+      if (isClosed) return;
       final s = await _service.status();
+      if (isClosed) return;
       if (s.ssid == ssid && (s.wifiIp?.isNotEmpty ?? false)) {
         emit(state.copyWith(
           joinPhase: NetworkJoinPhase.idle,
@@ -145,6 +150,7 @@ class NetworkCubit extends Cubit<NetworkState> {
         return;
       }
     }
+    if (isClosed) return;
     emit(state.copyWith(joinPhase: NetworkJoinPhase.failed));
   }
 
