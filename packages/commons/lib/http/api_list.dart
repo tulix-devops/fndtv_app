@@ -27,18 +27,41 @@ class APIList {
 
   /// Operator login on the box host. POST `{ email, password }` → 200 with a
   /// `tulix_session` cookie (HttpOnly) that authorises device registration.
+  ///
+  /// INTERIM: per the Box API design, `/device/register` is a warehouse-side
+  /// operator action, not something the box does — devices are meant to hold a
+  /// per-device Bearer token minted at provisioning. Self-registration (and
+  /// this login) stays only until the provisioning/token flow exists.
   static String get operatorLogin => '$_boxUrl/auth/login';
 
   /// Registers this set-top box on app init. POST body:
   /// `{ serial_number, mac_wifi, os_version }` with the operator session cookie.
   /// Returns 201 on success, 409 if the box is already registered.
+  /// See [operatorLogin] — interim until boxes are provisioned with tokens.
   static String get registerDevice => '$_boxUrl/device/register';
 
   /// Checks whether the box needs a newer app build. GET by device id (the UUID
-  /// from registration) with the operator session cookie → returns the latest
-  /// version, an `update_required` flag, and (if so) the APK URL + SHA-256.
+  /// from registration), PUBLIC (no auth) → returns the latest version, an
+  /// `update_required` flag, and (if so) the APK URL + SHA-256.
   static String deviceUpdate(String deviceId) =>
       '$_boxUrl/device/$deviceId/update';
+
+  /// Runtime config for the box (tenant, app version, channel-list URL, DPS/MDM
+  /// endpoints). GET by device id, PUBLIC (no auth).
+  static String deviceConfig(String deviceId) =>
+      '$_boxUrl/device/$deviceId/config';
+
+  /// Device check-in — the box's runtime heartbeat. POST device state
+  /// (`android_id`, `mac_address`, `installed_app_version`, `device_model`,
+  /// `os_version`) with `Authorization: Bearer <device token>` → latest app
+  /// version + APK URL, DRM token, channel-list URL, and pending MDM commands.
+  /// 401 bad token, 409 DEVICE_UNASSIGNED, 403 subscriber suspended/cancelled.
+  static String get deviceCheckin => '$_boxUrl/device/checkin';
+
+  /// Acknowledge an executed MDM command. POST `{ status: ACKED|FAILED,
+  /// result? }` by command id (received in the check-in response).
+  static String commandAck(String commandId) =>
+      '$_boxUrl/command/$commandId/ack';
 
   // Auth endpoints
   static String get login => '$_url/auth/login';

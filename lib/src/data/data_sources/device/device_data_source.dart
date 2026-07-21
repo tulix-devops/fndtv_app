@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:app_logger/app_logger.dart';
 import 'package:commons/commons.dart';
+import 'package:fndtv/src/data/models/device/device_checkin_model.dart';
 import 'package:fndtv/src/data/models/device/device_update_model.dart';
 import 'package:http/http.dart' as http;
 
@@ -84,18 +85,12 @@ final class DeviceDataSource {
   }
 
   /// Checks whether a newer app build is available for [deviceId], or null if
-  /// the check couldn't be completed.
+  /// the check couldn't be completed. The endpoint is public — no auth.
   Future<DeviceUpdateModel?> checkUpdate(String deviceId) async {
     try {
-      final cookie = await _operatorSession();
-      if (cookie == null) return null;
-
       final response = await _client.get(
         Uri.parse(APIList.deviceUpdate(deviceId)),
-        headers: {
-          'Accept': 'application/json',
-          'Cookie': cookie,
-        },
+        headers: {'Accept': 'application/json'},
       );
 
       if (response.statusCode == 200) {
@@ -110,6 +105,99 @@ final class DeviceDataSource {
     } catch (e) {
       logger.w('[STB] update check error: $e');
       return null;
+    }
+  }
+
+  /// Reports the box's state to the backend (`POST /device/checkin`) using its
+  /// per-device Bearer [deviceToken] minted at provisioning. All payload
+  /// fields are optional server-side — send whatever identity is available.
+  Future<({DeviceCheckinStatus status, DeviceCheckinModel? model})> checkin({
+    required String deviceToken,
+    String? androidId,
+    String? macAddress,
+    String? installedAppVersion,
+    String? deviceModel,
+    String? osVersion,
+  }) async {
+    try {
+      final response = await _client.post(
+        Uri.parse(APIList.deviceCheckin),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $deviceToken',
+        },
+        body: jsonEncode(<String, dynamic>{
+          if (androidId != null && androidId.isNotEmpty)
+            'android_id': androidId,
+          if (macAddress != null && macAddress.isNotEmpty)
+            'mac_address': macAddress,
+          if (installedAppVersion != null && installedAppVersion.isNotEmpty)
+            'installed_app_version': installedAppVersion,
+          if (deviceModel != null && deviceModel.isNotEmpty)
+            'device_model': deviceModel,
+          if (osVersion != null && osVersion.isNotEmpty)
+            'os_version': osVersion,
+        }),
+      );
+
+      switch (response.statusCode) {
+        case 200:
+          final json = jsonDecode(response.body) as Map<String, dynamic>;
+          return (
+            status: DeviceCheckinStatus.success,
+            model: DeviceCheckinModel.fromJson(json),
+          );
+        case 401:
+          logger.w('[STB] checkin rejected token: ${response.body}');
+          return (status: DeviceCheckinStatus.unauthorized, model: null);
+        case 403:
+          logger.w('[STB] checkin subscriber blocked: ${response.body}');
+          return (status: DeviceCheckinStatus.suspended, model: null);
+        case 409:
+          logger.w('[STB] checkin device unassigned: ${response.body}');
+          return (status: DeviceCheckinStatus.unassigned, model: null);
+        default:
+          logger.w(
+            '[STB] checkin HTTP ${response.statusCode}: ${response.body}',
+          );
+          return (status: DeviceCheckinStatus.failed, model: null);
+      }
+    } catch (e) {
+      logger.w('[STB] checkin request error: $e');
+      return (status: DeviceCheckinStatus.failed, model: null);
+    }
+  }
+
+  /// Acknowledges an executed MDM command (`POST /command/{id}/ack`) with
+  /// `ACKED` on [success], `FAILED` otherwise. Returns true if the backend
+  /// accepted the ack. Unacked commands are redelivered on the next check-in.
+  Future<bool> ackCommand({
+    required String commandId,
+    required bool success,
+    String? result,
+  }) async {
+    try {
+      final response = await _client.post(
+        Uri.parse(APIList.commandAck(commandId)),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(<String, dynamic>{
+          'status': success ? 'ACKED' : 'FAILED',
+          if (result != null && result.isNotEmpty) 'result': result,
+        }),
+      );
+
+      if (response.statusCode == 200) return true;
+      logger.w(
+        '[STB] command ack HTTP ${response.statusCode}: ${response.body}',
+      );
+      return false;
+    } catch (e) {
+      logger.w('[STB] command ack error: $e');
+      return false;
     }
   }
 

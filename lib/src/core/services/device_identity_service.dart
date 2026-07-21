@@ -74,6 +74,20 @@ class DeviceIdentityService {
     return mac;
   }
 
+  /// Marketing device model, e.g. `X88 Pro 14`, or empty if unavailable.
+  Future<String> getDeviceModel() async {
+    try {
+      if (Platform.isAndroid) {
+        return (await _deviceInfo.androidInfo).model;
+      } else if (Platform.isIOS) {
+        return (await _deviceInfo.iosInfo).utsname.machine;
+      }
+    } catch (e) {
+      logger.w('[STB] Device model read failed: $e');
+    }
+    return '';
+  }
+
   /// OS version string, e.g. `Android 13`.
   Future<String> getOsVersion() async {
     try {

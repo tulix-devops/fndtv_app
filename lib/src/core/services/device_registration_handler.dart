@@ -4,11 +4,14 @@ import 'package:app_logger/app_logger.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:fndtv/src/core/services/device_identity_service.dart';
 import 'package:fndtv/src/data/data_sources/device/device_data_source.dart';
+import 'package:fndtv/src/data/models/device/device_checkin_model.dart';
 import 'package:fndtv/src/data/repositories/device/device_repository.dart';
 import 'package:local_storage/local_storage.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 /// Reads the set-top box identity (serial number, Wi-Fi MAC, OS version) and
-/// registers it with the box provisioning backend on app initialization.
+/// registers it with the box provisioning backend on app initialization, then
+/// checks in if the box holds a provisioning-minted device token.
 ///
 /// Designed to be called fire-and-forget from the splash screen: it never
 /// throws, logs every step, and only registers once per serial (a 201 or a 409
@@ -38,6 +41,14 @@ class DeviceRegistrationHandler {
   static const String _anonymizedMac = '02:00:00:00:00:00';
 
   Future<void> registerOnInit() async {
+    await _registerIfNeeded();
+    await _checkinIfProvisioned();
+  }
+
+  /// Interim self-registration (operator-authorised). Per the Box API design,
+  /// registration is a warehouse action and boxes should instead arrive with a
+  /// device token — this stays until that provisioning flow exists.
+  Future<void> _registerIfNeeded() async {
     try {
       final serial = await _identity.getSerialNumber();
       if (serial.isEmpty) {
@@ -92,6 +103,49 @@ class DeviceRegistrationHandler {
       }
     } catch (e, st) {
       logger.e('[STB] Registration handler error: $e', stacktrace: st);
+    }
+  }
+
+  /// Runtime heartbeat (`POST /device/checkin`) — reports installed version and
+  /// identity, and surfaces pending MDM commands. Runs only when a
+  /// provisioning-minted device token is present in storage; silently skipped
+  /// otherwise (self-registered boxes have no token yet).
+  ///
+  /// Command execution/ack is not wired yet — pending commands are only
+  /// logged; the backend redelivers them until acked.
+  Future<void> _checkinIfProvisioned() async {
+    try {
+      final token = await _storage.get<String>(kStbDeviceTokenKey);
+      if (token == null || token.isEmpty) {
+        logger.d('[STB] No device token; skipping check-in.');
+        return;
+      }
+
+      final packageInfo = await PackageInfo.fromPlatform();
+      final result = await _repo.checkin(
+        deviceToken: token,
+        macAddress: await _identity.getWifiMac(),
+        installedAppVersion: packageInfo.version,
+        deviceModel: await _identity.getDeviceModel(),
+        osVersion: await _identity.getOsVersion(),
+      );
+
+      switch (result.status) {
+        case DeviceCheckinStatus.success:
+          final model = result.model!;
+          logger.i(
+            '[STB] Check-in ok — latest v${model.latestAppVersion}, '
+            '${model.commands.length} pending command(s)'
+            '${model.commands.isEmpty ? '' : ': ${model.commands.map((c) => c.type).join(', ')}'}',
+          );
+        case DeviceCheckinStatus.unauthorized:
+        case DeviceCheckinStatus.unassigned:
+        case DeviceCheckinStatus.suspended:
+        case DeviceCheckinStatus.failed:
+          logger.w('[STB] Check-in not accepted: ${result.status}.');
+      }
+    } catch (e, st) {
+      logger.e('[STB] Check-in handler error: $e', stacktrace: st);
     }
   }
 
