@@ -5,7 +5,9 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:local_storage/local_storage.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:fndtv/src/bloc/bloc.dart';
+import 'package:fndtv/src/bloc/device_identity_cubit/device_identity_cubit.dart';
 import 'package:fndtv/src/bloc/network_cubit/network_cubit.dart';
 import 'package:fndtv/src/bloc/theme_cubit/theme_cubit.dart';
 import 'package:fndtv/src/core/core.dart';
@@ -140,6 +142,19 @@ class AppBlocProvider extends StatelessWidget {
             );
             if (StbSystemService.isStb) cubit.refreshStatus();
             return cubit;
+          },
+        ),
+        BlocProvider<DeviceIdentityCubit>(
+          lazy: false,
+          create: (ctx) {
+            final identity = DeviceIdentityService();
+            final storage = ctx.read<LocalStorage>();
+            return DeviceIdentityCubit(
+              readMac: identity.getWifiMac,
+              readSerial: identity.getSerialNumber,
+              readDeviceId: () => storage.get<String>(kStbDeviceIdKey),
+              readVersion: () async => (await PackageInfo.fromPlatform()).version,
+            )..load();
           },
         ),
       ],
