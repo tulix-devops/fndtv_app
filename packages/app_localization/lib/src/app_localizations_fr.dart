@@ -265,10 +265,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get networkDeviceSerial => 'Numéro de série';
 
   @override
-  String get networkDeviceId => 'ID de l\'appareil';
+  String get networkDeviceId => 'ID de l’appareil';
 
   @override
-  String get networkDeviceVersion => 'Version de l\'application';
+  String get networkDeviceVersion => 'Version de l’application';
 
   @override
   String get networkAvailable => 'Réseaux disponibles';
@@ -306,7 +306,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get networkWiredWarnBody =>
-      'Passer en filaire maintenant mettra le boîtier hors ligne jusqu\'au branchement d\'un câble. Continuer ?';
+      'Passer en filaire maintenant mettra le boîtier hors ligne jusqu’au branchement d’un câble. Continuer ?';
 
   @override
   String get networkWiredWarnConfirm => 'Changer quand même';
