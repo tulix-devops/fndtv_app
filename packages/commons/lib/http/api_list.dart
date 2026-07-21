@@ -63,6 +63,9 @@ class APIList {
   static String commandAck(String commandId) =>
       '$_boxUrl/command/$commandId/ack';
 
+  /// Cheap reachability probe target on the box host (`GET /api/health`).
+  static String get boxHealth => '$_boxUrl/health';
+
   // Auth endpoints
   static String get login => '$_url/auth/login';
   static String get signUp => '$_url/auth/signup';
