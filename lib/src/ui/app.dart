@@ -11,7 +11,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:fndtv/src/index.dart';
+import 'package:fndtv/src/core/services/app_route_tracker.dart';
 import 'package:fndtv/src/ui/widgets/stb/stb_power_guard.dart';
+import 'package:fndtv/src/ui/widgets/stb/tv_identity_badge.dart';
+import 'package:fndtv/src/ui/widgets/stb/tv_offline_overlay.dart';
 import 'package:fndtv/src/ui/app_view.dart';
 import 'package:fndtv/src/ui/pages/main/main_container_page.dart';
 import 'package:fndtv/src/ui/pages/live_detail/new_live_detail_page.dart';
@@ -19,6 +22,10 @@ import 'package:just_audio_background/just_audio_background.dart';
 
 import 'package:ui_kit/ui_kit.dart';
 import 'package:app_localization/app_localization.dart';
+
+/// Global navigator — lets the offline overlay (which lives OUTSIDE the
+/// Navigator, in MaterialApp.builder) push the Network page.
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
 class App extends StatefulWidget {
   const App({super.key});
@@ -79,11 +86,19 @@ class _AppState extends State<App> {
               },
               child: MaterialApp(
                 debugShowCheckedModeBanner: false,
-                // STB: power guard (inactivity → sleep) via a self-contained
-                // overlay wrapped around the app.
+                navigatorKey: appNavigatorKey,
+                navigatorObservers: [AppRouteTracker()],
+                // STB: power guard + global identity badge + offline overlay,
+                // stacked over every route.
                 builder: StbSystemService.isStb
                     ? (context, child) => StbPowerGuard(
-                          child: child ?? const SizedBox.shrink(),
+                          child: Stack(
+                            children: [
+                              child ?? const SizedBox.shrink(),
+                              const TvIdentityBadge(),
+                              const TvOfflineOverlay(),
+                            ],
+                          ),
                         )
                     : null,
                 locale: context.select<LocalizationCubit, Locale>(
