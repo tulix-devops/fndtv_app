@@ -267,7 +267,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get networkDeviceId => 'ID del dispositivo';
 
   @override
-  String get networkDeviceVersion => 'Versión de la app';
+  String get networkDeviceVersion => 'Versión de la aplicación';
 
   @override
   String get networkAvailable => 'Redes disponibles';
@@ -282,7 +282,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get networkNoneFound => 'No se encontraron redes';
 
   @override
-  String get networkPasswordTitle => 'Introduce la contraseña Wi-Fi';
+  String get networkPasswordTitle => 'Introduzca la contraseña Wi-Fi';
 
   @override
   String get networkPasswordHint => 'Contraseña';
@@ -295,7 +295,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get networkJoinFailed =>
-      'No se pudo conectar — comprueba la contraseña';
+      'No se pudo conectar — compruebe la contraseña';
 
   @override
   String get networkRetry => 'Reintentar';

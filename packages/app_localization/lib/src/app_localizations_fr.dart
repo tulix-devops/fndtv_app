@@ -268,7 +268,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get networkDeviceId => 'ID de l\'appareil';
 
   @override
-  String get networkDeviceVersion => 'Version de l\'app';
+  String get networkDeviceVersion => 'Version de l\'application';
 
   @override
   String get networkAvailable => 'Réseaux disponibles';

@@ -97,7 +97,7 @@
   "networkDeviceMac": "Adresse MAC",
   "networkDeviceSerial": "Numéro de série",
   "networkDeviceId": "ID de l'appareil",
-  "networkDeviceVersion": "Version de l'app",
+  "networkDeviceVersion": "Version de l'application",
   "networkAvailable": "Réseaux disponibles",
   "networkScan": "Rechercher",
   "networkScanning": "Recherche…",
