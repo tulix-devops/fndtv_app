@@ -7,6 +7,13 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Network manager (Wi-Fi/Ethernet bridge): scan requires location perm on
+         API 29-32, NEARBY_WIFI_DEVICES on API 33+. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+
     <!-- Runs on Android TV; leanback optional so it also installs on plain boxes -->
     <uses-feature
         android:name="android.software.leanback"

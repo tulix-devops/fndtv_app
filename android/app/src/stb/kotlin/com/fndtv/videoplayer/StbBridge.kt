@@ -8,6 +8,8 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.wifi.WifiConfiguration
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -69,6 +71,15 @@ class StbBridge(private val context: Context) {
                     "cpuSerial" -> getCpuSerial()
                     "connectionType" -> getConnectionType()
                     "isRootAvailable" -> isRootAvailable()
+                    // network manager
+                    "wifiStatus" -> wifiStatus()
+                    "ethernetStatus" -> ethernetStatus()
+                    "scanWifi" -> scanWifi()
+                    "connectWifi" -> connectWifi(
+                        call.argument<String>("ssid") ?: "",
+                        call.argument<String>("password")
+                    )
+                    "setWifiEnabled" -> setWifiEnabled(call.argument<Boolean>("enabled") ?: true)
                     // §7 timezone
                     "syncTimezone" -> syncTimezone()
                     // §6 power
@@ -496,6 +507,147 @@ class StbBridge(private val context: Context) {
             disabledPackages.filter { it.isNotBlank() && disablePackage(it) }
         Log.i(tag, "runStartupMaintenance -> $summary")
         return summary
+    }
+
+    // ─── network manager (device-owner APIs primary, root shell fallback) ────
+
+    private val wifi: WifiManager?
+        get() = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+
+    /** {enabled, ssid, ip} — ssid null when disconnected/unknown. */
+    private fun wifiStatus(): Map<String, Any?> {
+        val w = wifi
+        var ssid: String? = try {
+            @Suppress("DEPRECATION")
+            w?.connectionInfo?.ssid?.trim('"')?.takeIf { it.isNotBlank() && it != "<unknown ssid>" }
+        } catch (_: Throwable) { null }
+        if (ssid == null && isRootAvailable()) {
+            // A11+: `cmd wifi status` prints: Wifi is connected to "MySsid"
+            val out = runSuCapture("cmd wifi status").output
+            ssid = Regex("connected to \"(.+?)\"").find(out)?.groupValues?.get(1)
+        }
+        return mapOf(
+            "enabled" to (try { w?.isWifiEnabled == true } catch (_: Throwable) { false }),
+            "ssid" to ssid,
+            "ip" to ipFromInterface("wlan0")
+        )
+    }
+
+    /** {linked, ip} — linked = carrier up on eth0. */
+    private fun ethernetStatus(): Map<String, Any?> {
+        val linked = try {
+            File("/sys/class/net/eth0/carrier").readText().trim() == "1"
+        } catch (_: Throwable) { false }
+        return mapOf("linked" to linked, "ip" to ipFromInterface("eth0"))
+    }
+
+    private fun ipFromInterface(name: String): String? = try {
+        NetworkInterface.getByName(name)?.inetAddresses?.toList()
+            ?.filterIsInstance<Inet4Address>()
+            ?.firstOrNull { !it.isLoopbackAddress }?.hostAddress
+    } catch (_: Throwable) { null }
+
+    /**
+     * Scan for networks. Primary: WifiManager (location self-granted via root).
+     * Fallback: `cmd wifi list-scan-results` (A11+). Returns a list of
+     * {ssid, secured, rssi} deduped by ssid (strongest kept).
+     */
+    private fun scanWifi(): List<Map<String, Any?>> {
+        if (isRootAvailable()) {
+            runSu(
+                "pm grant ${context.packageName} android.permission.ACCESS_FINE_LOCATION",
+                "pm grant ${context.packageName} android.permission.NEARBY_WIFI_DEVICES"
+            )
+        }
+        val results = mutableListOf<Triple<String, Boolean, Int>>() // ssid, secured, rssi
+        try {
+            val w = wifi
+            @Suppress("DEPRECATION") w?.startScan()
+            Thread.sleep(2500) // give the chip a beat; cached results are fine too
+            @Suppress("DEPRECATION")
+            w?.scanResults?.forEach { r ->
+                val ssid = r.SSID?.takeIf { it.isNotBlank() } ?: return@forEach
+                val secured = listOf("WEP", "PSK", "EAP", "SAE").any { r.capabilities.contains(it) }
+                results.add(Triple(ssid, secured, r.level))
+            }
+        } catch (t: Throwable) {
+            Log.w(tag, "WifiManager scan failed", t)
+        }
+        if (results.isEmpty() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && isRootAvailable()) {
+            // Header: "BSSID  Frequency  RSSI  Age(sec)  SSID  Flags"
+            val out = runSuCapture("cmd wifi start-scan", "sleep 3", "cmd wifi list-scan-results").output
+            for (line in out.lines().drop(1)) {
+                val m = Regex(
+                    "^\\s*([0-9a-fA-F:]{17})\\s+\\S+\\s+(-?\\d+).*?\\s{2,}(\\S.*?)\\s{2,}(\\[.*)?$"
+                ).find(line) ?: continue
+                val rssi = m.groupValues[2].toIntOrNull() ?: continue
+                val ssid = m.groupValues[3].trim()
+                if (ssid.isBlank()) continue
+                val secured = m.groupValues[4].let { it.contains("WPA") || it.contains("WEP") || it.contains("SAE") }
+                results.add(Triple(ssid, secured, rssi))
+            }
+        }
+        return results
+            .groupBy { it.first }
+            .map { (_, group) -> group.maxBy { it.third } }
+            .sortedByDescending { it.third }
+            .map { mapOf("ssid" to it.first, "secured" to it.second, "rssi" to it.third) }
+    }
+
+    /**
+     * Join a network. Primary: legacy WifiConfiguration add/enable — still
+     * honoured for device-owner apps on API 29+ (and the only path on the
+     * Android 10 X88 Pro 10 fleet). Fallback: `cmd wifi connect-network` (A11+).
+     * Returns true when the join was INITIATED; Dart polls wifiStatus for the
+     * outcome (a wrong password only surfaces as a timeout).
+     */
+    private fun connectWifi(ssid: String, password: String?): Boolean {
+        if (ssid.isBlank()) return false
+        try {
+            val w = wifi ?: throw IllegalStateException("no WifiManager")
+            @Suppress("DEPRECATION")
+            if (w.isWifiEnabled == false) w.isWifiEnabled = true
+            @Suppress("DEPRECATION")
+            val conf = WifiConfiguration().apply {
+                SSID = "\"$ssid\""
+                if (password.isNullOrEmpty()) {
+                    allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE)
+                } else {
+                    preSharedKey = "\"$password\""
+                }
+            }
+            @Suppress("DEPRECATION")
+            val netId = w.addNetwork(conf)
+            if (netId >= 0) {
+                @Suppress("DEPRECATION") w.disconnect()
+                @Suppress("DEPRECATION") w.enableNetwork(netId, true)
+                @Suppress("DEPRECATION") w.reconnect()
+                Log.i(tag, "connectWifi: legacy path initiated for $ssid (netId=$netId)")
+                return true
+            }
+            Log.w(tag, "connectWifi: addNetwork returned $netId for $ssid")
+        } catch (t: Throwable) {
+            Log.w(tag, "connectWifi legacy path failed", t)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && isRootAvailable()) {
+            val cmd = if (password.isNullOrEmpty())
+                "cmd wifi connect-network '${ssid.replace("'", "'\\''")}' open"
+            else
+                "cmd wifi connect-network '${ssid.replace("'", "'\\''")}' wpa2 '${password.replace("'", "'\\''")}'"
+            return runSu(cmd) == 0
+        }
+        return false
+    }
+
+    /** Toggle Wi-Fi. Primary: DO-exempt setWifiEnabled; fallback: `svc wifi`. */
+    private fun setWifiEnabled(enabled: Boolean): Boolean {
+        try {
+            @Suppress("DEPRECATION")
+            if (wifi?.setWifiEnabled(enabled) == true) return true
+        } catch (t: Throwable) {
+            Log.w(tag, "setWifiEnabled($enabled) API path failed", t)
+        }
+        return runSu("svc wifi ${if (enabled) "enable" else "disable"}") == 0
     }
 
     // ─── root helper ──────────────────────────────────────────────────────────
