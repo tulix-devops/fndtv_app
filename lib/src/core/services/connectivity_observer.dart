@@ -22,24 +22,33 @@ class ConnectivityObserver {
   Timer? _offlineTicker;
   bool _online = true;
   bool _emittedOnce = false;
+  bool _disposed = false;
+
+  /// Bumped at the start of every change/recheck probe so a stale (slower)
+  /// probe that resolves after a newer one can't clobber the newer result.
+  int _generation = 0;
 
   bool get isOnline => _online;
   Stream<bool> get onlineStream => _controller.stream;
 
   Future<void> _onChange(List<ConnectivityResult> results) async {
+    final gen = ++_generation;
     final hasInterface =
         results.any((r) => r != ConnectivityResult.none);
     final online = hasInterface && await _probe();
+    if (gen != _generation) return; // superseded by a newer event
     _set(online);
   }
 
   void _set(bool online) {
+    if (_disposed) return;
     final changed = online != _online || !_emittedOnce;
     _online = online;
     _emittedOnce = true;
-    if (changed) _controller.add(online);
+    if (changed && !_controller.isClosed) _controller.add(online);
     if (!online) {
       _offlineTicker ??= Timer.periodic(const Duration(seconds: 30), (_) async {
+        if (_disposed) return;
         if (await _probe()) _set(true);
       });
     } else {
@@ -50,7 +59,9 @@ class ConnectivityObserver {
 
   /// Manual re-check (e.g. after a Wi-Fi join) — probes and updates state.
   Future<bool> recheck() async {
+    final gen = ++_generation;
     final online = await _probe();
+    if (gen != _generation) return _online; // superseded by a newer event
     _set(online);
     return online;
   }
@@ -67,8 +78,11 @@ class ConnectivityObserver {
   }
 
   Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
     _offlineTicker?.cancel();
+    _offlineTicker = null;
     await _sub.cancel();
-    await _controller.close();
+    if (!_controller.isClosed) await _controller.close();
   }
 }
