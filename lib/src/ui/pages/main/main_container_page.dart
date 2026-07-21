@@ -17,8 +17,10 @@ import 'package:fndtv/src/ui/pages/on_demand/new_on_demand_page.dart';
 import 'package:fndtv/src/ui/pages/radio/new_radio_page.dart';
 import 'package:fndtv/src/ui/pages/about/new_about_page.dart';
 import 'package:fndtv/src/ui/pages/updates/tv_updates_page.dart';
+import 'package:fndtv/src/ui/pages/network/tv_network_page.dart';
 import 'package:fndtv/src/ui/pages/settings/settings_page.dart';
 import 'package:app_localization/app_localization.dart';
+import 'package:fndtv/src/core/services/stb_system_service.dart';
 import 'package:ui_kit/ui_kit.dart';
 
 enum _MainTab {
@@ -126,6 +128,10 @@ class _MainContainerPageState extends State<MainContainerPage> {
   static const int _kLanguageNavIndex = 5;
   static const int _kUpdatesNavIndex = 6;
 
+  /// STB only — the in-app network manager (kiosk boxes can't reach Android
+  /// Settings). Sits last, so its absence on other flavors shifts nothing.
+  static const int _kNetworkNavIndex = 7;
+
   void _onNavSelected(int index) {
     if (index == _kLanguageNavIndex) {
       _openTvLanguageDialog();
@@ -133,6 +139,10 @@ class _MainContainerPageState extends State<MainContainerPage> {
     }
     if (index == _kUpdatesNavIndex) {
       _openUpdatesPage();
+      return;
+    }
+    if (index == _kNetworkNavIndex) {
+      _openNetworkPage();
       return;
     }
     _onTabTapped(index);
@@ -143,6 +153,13 @@ class _MainContainerPageState extends State<MainContainerPage> {
   Future<void> _openUpdatesPage() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(builder: (_) => const TvUpdatesPage()),
+    );
+    if (mounted) _scaffoldKey.currentState?.requestNavFocus();
+  }
+
+  Future<void> _openNetworkPage() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => const TvNetworkPage()),
     );
     if (mounted) _scaffoldKey.currentState?.requestNavFocus();
   }
@@ -294,6 +311,9 @@ class _MainContainerPageState extends State<MainContainerPage> {
                     label: context.l.navUpdates,
                     icon: Icons.system_update_rounded
                   ),
+                  // STB: in-app network manager — opens a full-screen page.
+                  if (StbSystemService.isStb)
+                    (label: context.l.navNetwork, icon: Icons.wifi_rounded),
                 ],
                 body: _buildBody(context, currentTab, selectedLanguage),
                 hasNavbar: true,
