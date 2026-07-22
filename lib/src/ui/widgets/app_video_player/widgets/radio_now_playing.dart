@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:fndtv/src/core/audio/radio_metadata.dart';
+import 'package:fndtv/src/core/audio/radio_player_service.dart';
 import 'package:fndtv/src/data/models/content/live_model.dart';
 
 /// Persistent "now playing" backdrop for radio (audio-only) playback: a centered
@@ -72,6 +74,50 @@ class RadioNowPlaying extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ),
+                  // Live "now playing" track from the stream's ICY metadata.
+                  // Absent (zero height) until/unless the stream sends one.
+                  ValueListenableBuilder<RadioMetadata?>(
+                    valueListenable: RadioPlayerService.instance.nowPlaying,
+                    builder: (context, meta, _) {
+                      if (meta == null) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 22),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 620),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                meta.title,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.sora(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (meta.artist != null) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  meta.artist!,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.sora(
+                                    color: Colors.white60,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

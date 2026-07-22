@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:app_localization/app_localization.dart';
+import 'package:fndtv/src/core/audio/radio_metadata.dart';
 import 'package:fndtv/src/core/audio/radio_player_service.dart';
 import 'package:fndtv/src/data/models/content/live_model.dart';
 import 'package:ui_kit/ui_kit.dart';
@@ -67,12 +68,19 @@ class RadioMiniBar extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
-                      context.l.brandRadio,
-                      style: GoogleFonts.sora(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w400,
-                        color: Colors.white70,
+                    // Live track (ICY) when the stream provides one; otherwise
+                    // the brand line.
+                    ValueListenableBuilder<RadioMetadata?>(
+                      valueListenable: RadioPlayerService.instance.nowPlaying,
+                      builder: (context, meta, _) => Text(
+                        meta?.display ?? context.l.brandRadio,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.sora(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w400,
+                          color: Colors.white70,
+                        ),
                       ),
                     ),
                   ],

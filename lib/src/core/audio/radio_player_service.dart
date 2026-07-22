@@ -2,6 +2,7 @@ import 'package:app_logger/app_logger.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'package:fndtv/src/core/audio/radio_metadata.dart';
 import 'package:fndtv/src/data/models/content/live_model.dart';
 
 /// App-wide radio playback. A single [AudioPlayer] streams the selected radio
@@ -22,6 +23,16 @@ class RadioPlayerService {
       onError: (Object err, StackTrace st) =>
           logger.e('[Radio] playback error: $err', stacktrace: st),
     );
+    // ICY "now playing" — just_audio's backend parses the stream's ICY
+    // StreamTitle for us. We turn it into a RadioMetadata for the UI. Cleared
+    // on channel switch / stop so a stale track never lingers.
+    _player.icyMetadataStream.listen((icy) {
+      final meta = RadioMetadata.parse(icy?.info?.title);
+      nowPlaying.value = meta;
+      if (meta != null) {
+        logger.d('[Radio] now playing → ${meta.display}');
+      }
+    });
   }
   static final RadioPlayerService instance = RadioPlayerService._();
 
@@ -33,6 +44,12 @@ class RadioPlayerService {
   final ValueNotifier<LiveModel?> currentChannel =
       ValueNotifier<LiveModel?>(null);
 
+  /// The live "now playing" track from the stream's ICY metadata, or null when
+  /// the stream sends none. Drives the now-playing line in the player + mini
+  /// bar. Reset whenever the channel changes or playback stops.
+  final ValueNotifier<RadioMetadata?> nowPlaying =
+      ValueNotifier<RadioMetadata?>(null);
+
   Stream<PlayerState> get playerStateStream => _player.playerStateStream;
   bool get isPlaying => _player.playing;
 
@@ -41,7 +58,6 @@ class RadioPlayerService {
   Future<void> play(LiveModel channel) async {
     final s = channel.sources;
     final url = s.getPreferredVideoSource() ?? '';
-    print('OEEEE $url');
 
     // Dump everything we know about this channel before we try to play it.
     logger.i('[Radio] ▶ play request: "${channel.title}" '
@@ -64,6 +80,8 @@ class RadioPlayerService {
     }
 
     currentChannel.value = channel;
+    // New station — drop the previous track until this stream sends its own.
+    nowPlaying.value = null;
 
     final art = channel.images.getBanner();
     logger.d('[Radio] artwork → ${art.isEmpty ? '(none)' : art}');
@@ -115,5 +133,6 @@ class RadioPlayerService {
     logger.i('[Radio] ⏹ stop "${currentChannel.value?.title ?? '-'}"');
     await _player.stop();
     currentChannel.value = null;
+    nowPlaying.value = null;
   }
 }
