@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:app_logger/app_logger.dart';
 import 'package:commons/commons.dart';
+import 'package:fndtv/src/core/config/app_config.dart';
 import 'package:fndtv/src/data/models/device/device_checkin_model.dart';
 import 'package:fndtv/src/data/models/device/device_update_model.dart';
 import 'package:http/http.dart' as http;
@@ -20,9 +21,11 @@ enum DeviceRegisterResult {
 
 /// Talks to the box provisioning backend.
 ///
-/// The `/device/register` endpoint is an operator action guarded by a session
-/// cookie, so registration is a two-step call: log in as the operator to obtain
-/// the `tulix_session` cookie, then POST the device payload with that cookie.
+/// The box authenticates its device calls (registration, update check) with the
+/// setopbox API key ([AppConfig.setopboxApiKey], injected at build time) sent as
+/// `Authorization: Bearer <key>` — replacing the old embedded operator
+/// credentials. Check-in still uses the per-device Bearer token minted at
+/// provisioning (a separate credential).
 ///
 /// Uses its own [http.Client] (not the shared app client) so it neither leaks
 /// the fnd user bearer token to the box host nor relies on the app's envelope
@@ -30,13 +33,20 @@ enum DeviceRegisterResult {
 final class DeviceDataSource {
   DeviceDataSource();
 
-  // Operator credentials used to obtain the session cookie. Embedded because
-  // the box self-registers on boot with no interactive login.
-  // TODO: move to a build-time/config secret if these ever need to rotate.
-  static const String _operatorEmail = 'app@fndtv.com';
-  static const String _operatorPassword = 'fdsf@3q!!3';
-
   final http.Client _client = http.Client();
+
+  /// `Authorization` header value for the setopbox API key, or null if no key
+  /// was injected at build time (misconfigured build — calls will fail auth).
+  String? get _apiKeyAuth {
+    if (!AppConfig.hasSetopboxApiKey) {
+      logger.w('[STB] FNDTV_SETOPBOX_API_KEY not set — device call will fail '
+          'auth. Build with --dart-define-from-file=env/env.production.');
+      return null;
+    }
+    // TODO(auth-scheme): using Bearer for now; backend dev to confirm whether
+    // it expects `Authorization: Bearer` or a custom header (e.g. X-API-Key).
+    return 'Bearer ${AppConfig.setopboxApiKey}';
+  }
 
   /// Registers the box. On success (201) the response carries the backend
   /// `device_id` (a UUID) — returned here so it can be persisted for later
@@ -47,15 +57,17 @@ final class DeviceDataSource {
     required String osVersion,
   }) async {
     try {
-      final cookie = await _operatorSession();
-      if (cookie == null) return (status: DeviceRegisterResult.failed, deviceId: null);
+      final auth = _apiKeyAuth;
+      if (auth == null) {
+        return (status: DeviceRegisterResult.failed, deviceId: null);
+      }
 
       final response = await _client.post(
         Uri.parse(APIList.registerDevice),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'Cookie': cookie,
+          'Authorization': auth,
         },
         body: jsonEncode(<String, dynamic>{
           'serial_number': serialNumber,
@@ -85,12 +97,16 @@ final class DeviceDataSource {
   }
 
   /// Checks whether a newer app build is available for [deviceId], or null if
-  /// the check couldn't be completed. The endpoint is public — no auth.
+  /// the check couldn't be completed. Sends the setopbox API key (harmless if
+  /// the endpoint is public; required if it isn't).
   Future<DeviceUpdateModel?> checkUpdate(String deviceId) async {
     try {
       final response = await _client.get(
         Uri.parse(APIList.deviceUpdate(deviceId)),
-        headers: {'Accept': 'application/json'},
+        headers: {
+          'Accept': 'application/json',
+          if (_apiKeyAuth case final auth?) 'Authorization': auth,
+        },
       );
 
       if (response.statusCode == 200) {
@@ -209,38 +225,5 @@ final class DeviceDataSource {
       }
     } catch (_) {}
     return null;
-  }
-
-  /// Logs in as the operator and returns the session cookie header value
-  /// (`tulix_session=...`), or null if login failed.
-  Future<String?> _operatorSession() async {
-    final res = await _client.post(
-      Uri.parse(APIList.operatorLogin),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: jsonEncode(<String, String>{
-        'email': _operatorEmail,
-        'password': _operatorPassword,
-      }),
-    );
-
-    if (res.statusCode == 200) {
-      final cookie = _extractSessionCookie(res.headers['set-cookie']);
-      if (cookie == null) {
-        logger.w('[STB] login ok but no session cookie in response.');
-      }
-      return cookie;
-    }
-
-    logger.w('[STB] operator login HTTP ${res.statusCode}: ${res.body}');
-    return null;
-  }
-
-  String? _extractSessionCookie(String? setCookie) {
-    if (setCookie == null || setCookie.isEmpty) return null;
-    final match = RegExp(r'tulix_session=[^;,\s]+').firstMatch(setCookie);
-    return match?.group(0);
   }
 }

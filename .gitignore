@@ -1,3 +1,8 @@
+# Secrets — build-time env (contains FNDTV_SETOPBOX_API_KEY). Provide it
+# out-of-band (local file / CI secret); do NOT commit.
+env/env.production
+env/*.env
+
 # Miscellaneous
 *.class
 *.log
