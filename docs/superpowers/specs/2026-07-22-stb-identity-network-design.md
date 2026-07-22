@@ -69,8 +69,8 @@ All new pieces are stb-gated (`StbSystemService.isStb`-style guards).
 
 | Method | Primary (device-owner) | Fallback (root shell) |
 |---|---|---|
-| `scanWifi()` | `WifiManager.startScan` + `getScanResults` (self-grant location via DO/root `pm grant`) | `cmd wifi list-scan-results` (A11+) |
-| `connectWifi(ssid, password?)` | DO-privileged legacy `addNetwork` + `enableNetwork` (works API 29–35 for device owners) | `cmd wifi connect-network <ssid> wpa2 <pass>` (A11+) |
+| `scanWifi()` | `WifiManager.startScan` + `getScanResults` (self-grant location via DO/root `pm grant`); classifies each AP as `open`/`wpa2`/`wpa3` | `cmd wifi list-scan-results` (A11+) |
+| `connectWifi(ssid, password?, security)` | DO-privileged legacy `addNetwork` + `enableNetwork` (API 29–35); WPA3 uses `KeyMgmt.SAE` (API 30+) | `cmd wifi connect-network <ssid> <wpa2\|wpa3\|open> <pass>` (A11+) |
 | `setWifiEnabled(bool)` | `WifiManager.setWifiEnabled` (DO-exempt from deprecation block) | `svc wifi enable\|disable` |
 | `ethernetStatus()` | `ConnectivityManager` transport ETHERNET link + IP | `ip link` / `ifconfig eth0` parse |
 

@@ -124,9 +124,10 @@ class NetworkCubit extends Cubit<NetworkState> {
 
   /// Initiates a join, then polls status until [ssid] is connected or
   /// [joinTimeout] elapses (wrong password only surfaces as a timeout).
-  Future<void> join(String ssid, {String? password}) async {
+  /// [security] (`open`/`wpa2`/`wpa3`) is forwarded so WPA3 uses SAE.
+  Future<void> join(String ssid, {String? password, String? security}) async {
     emit(state.copyWith(joinPhase: NetworkJoinPhase.connecting, joiningSsid: () => ssid));
-    final initiated = await _service.connect(ssid, password: password);
+    final initiated = await _service.connect(ssid, password: password, security: security);
     if (isClosed) return;
     if (!initiated) {
       emit(state.copyWith(joinPhase: NetworkJoinPhase.failed));

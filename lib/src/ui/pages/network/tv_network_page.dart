@@ -36,7 +36,7 @@ class _TvNetworkPageState extends State<TvNetworkPage> {
   Future<void> _onNetworkSelected(WifiNetwork network) async {
     final cubit = context.read<NetworkCubit>();
     if (!network.secured) {
-      await cubit.join(network.ssid);
+      await cubit.join(network.ssid, security: network.security);
       return;
     }
     final password = await Navigator.of(context).push<String>(
@@ -45,7 +45,7 @@ class _TvNetworkPageState extends State<TvNetworkPage> {
       ),
     );
     if (password != null && password.isNotEmpty && mounted) {
-      await cubit.join(network.ssid, password: password);
+      await cubit.join(network.ssid, password: password, security: network.security);
     }
   }
 

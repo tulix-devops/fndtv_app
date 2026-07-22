@@ -23,6 +23,16 @@ void main() {
       expect(n.ssid, '');
       expect(n.secured, isFalse);
       expect(n.level, 1);
+      expect(n.security, 'open');
+    });
+
+    test('parses security type; defaults to open when absent', () {
+      final wpa3 = WifiNetwork.fromMap(
+        {'ssid': 'S', 'secured': true, 'rssi': -50, 'security': 'wpa3'},
+      );
+      expect(wpa3.security, 'wpa3');
+      final legacy = WifiNetwork.fromMap({'ssid': 'S', 'secured': true, 'rssi': -50});
+      expect(legacy.security, 'open');
     });
   });
 

@@ -95,7 +95,8 @@ class StbBridge(private val context: Context) {
                 "scanWifi" -> scanWifi()
                 "connectWifi" -> connectWifi(
                     call.argument<String>("ssid") ?: "",
-                    call.argument<String>("password")
+                    call.argument<String>("password"),
+                    call.argument<String>("security")
                 )
                 "setWifiEnabled" -> setWifiEnabled(call.argument<Boolean>("enabled") ?: true)
                 // §7 timezone
@@ -564,10 +565,33 @@ class StbBridge(private val context: Context) {
             ?.firstOrNull { !it.isLoopbackAddress }?.hostAddress
     } catch (_: Throwable) { null }
 
+    /** One scan result carried internally before it's mapped to a channel reply. */
+    private data class ScanNet(
+        val ssid: String,
+        val secured: Boolean,
+        val rssi: Int,
+        val security: String
+    )
+
+    /**
+     * Classifies a scan result's `capabilities` string into the security type
+     * the join path acts on: `open`, `wpa2` (also WEP/EAP best-effort), or
+     * `wpa3`. WPA3 is reported ONLY for SAE-required APs (SAE present, PSK
+     * absent); WPA2/WPA3 transition-mode APs advertise both and join over the
+     * PSK path, so they're reported as `wpa2`.
+     */
+    private fun classifySecurity(capabilities: String): String = when {
+        capabilities.contains("SAE") && !capabilities.contains("PSK") -> "wpa3"
+        capabilities.contains("PSK") || capabilities.contains("SAE") ||
+            capabilities.contains("WPA") || capabilities.contains("WEP") ||
+            capabilities.contains("EAP") -> "wpa2"
+        else -> "open"
+    }
+
     /**
      * Scan for networks. Primary: WifiManager (location self-granted via root).
      * Fallback: `cmd wifi list-scan-results` (A11+). Returns a list of
-     * {ssid, secured, rssi} deduped by ssid (strongest kept).
+     * {ssid, secured, rssi, security} deduped by ssid (strongest kept).
      */
     private fun scanWifi(): List<Map<String, Any?>> {
         if (isRootAvailable()) {
@@ -576,7 +600,7 @@ class StbBridge(private val context: Context) {
                 "pm grant ${context.packageName} android.permission.NEARBY_WIFI_DEVICES"
             )
         }
-        val results = mutableListOf<Triple<String, Boolean, Int>>() // ssid, secured, rssi
+        val results = mutableListOf<ScanNet>()
         try {
             val w = wifi
             @Suppress("DEPRECATION") w?.startScan()
@@ -584,8 +608,8 @@ class StbBridge(private val context: Context) {
             @Suppress("DEPRECATION")
             w?.scanResults?.forEach { r ->
                 val ssid = r.SSID?.takeIf { it.isNotBlank() } ?: return@forEach
-                val secured = listOf("WEP", "PSK", "EAP", "SAE").any { r.capabilities.contains(it) }
-                results.add(Triple(ssid, secured, r.level))
+                val security = classifySecurity(r.capabilities)
+                results.add(ScanNet(ssid, security != "open", r.level, security))
             }
         } catch (t: Throwable) {
             Log.w(tag, "WifiManager scan failed", t)
@@ -601,26 +625,38 @@ class StbBridge(private val context: Context) {
                 val rssi = m.groupValues[2].toIntOrNull() ?: continue
                 val ssid = m.groupValues[3].trim()
                 if (ssid.isBlank()) continue
-                val secured = m.groupValues[4].let { it.contains("WPA") || it.contains("WEP") || it.contains("SAE") }
-                results.add(Triple(ssid, secured, rssi))
+                val security = classifySecurity(m.groupValues[4])
+                results.add(ScanNet(ssid, security != "open", rssi, security))
             }
         }
         return results
-            .groupBy { it.first }
-            .map { (_, group) -> group.maxBy { it.third } }
-            .sortedByDescending { it.third }
-            .map { mapOf("ssid" to it.first, "secured" to it.second, "rssi" to it.third) }
+            .groupBy { it.ssid }
+            .map { (_, group) -> group.maxBy { it.rssi } }
+            .sortedByDescending { it.rssi }
+            .map {
+                mapOf(
+                    "ssid" to it.ssid,
+                    "secured" to it.secured,
+                    "rssi" to it.rssi,
+                    "security" to it.security
+                )
+            }
     }
 
     /**
      * Join a network. Primary: legacy WifiConfiguration add/enable — still
      * honoured for device-owner apps on API 29+ (and the only path on the
      * Android 10 X88 Pro 10 fleet). Fallback: `cmd wifi connect-network` (A11+).
-     * Returns true when the join was INITIATED; Dart polls wifiStatus for the
-     * outcome (a wrong password only surfaces as a timeout).
+     * [security] is `open`/`wpa2`/`wpa3` (from the scan); WPA3 uses SAE key
+     * management, which the legacy WifiConfiguration path supports only on
+     * API 30+ — an SAE-only AP on an unrooted Android-10 box can't be joined and
+     * surfaces as the usual timeout. Returns true when the join was INITIATED;
+     * Dart polls wifiStatus for the outcome (a wrong password only shows as a
+     * timeout).
      */
-    private fun connectWifi(ssid: String, password: String?): Boolean {
+    private fun connectWifi(ssid: String, password: String?, security: String?): Boolean {
         if (ssid.isBlank()) return false
+        val wantsWpa3 = security == "wpa3"
         try {
             val w = wifi ?: throw IllegalStateException("no WifiManager")
             @Suppress("DEPRECATION")
@@ -628,10 +664,17 @@ class StbBridge(private val context: Context) {
             @Suppress("DEPRECATION")
             val conf = WifiConfiguration().apply {
                 SSID = "\"$ssid\""
-                if (password.isNullOrEmpty()) {
-                    allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE)
-                } else {
-                    preSharedKey = "\"$password\""
+                when {
+                    password.isNullOrEmpty() ->
+                        allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE)
+                    wantsWpa3 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
+                        // WPA3-Personal (SAE). KeyMgmt.SAE is API 30+; the
+                        // framework enforces the required Protected Management
+                        // Frames for SAE automatically.
+                        allowedKeyManagement.set(WifiConfiguration.KeyMgmt.SAE)
+                        preSharedKey = "\"$password\""
+                    }
+                    else -> preSharedKey = "\"$password\"" // WPA2-PSK
                 }
             }
             @Suppress("DEPRECATION")
@@ -640,7 +683,7 @@ class StbBridge(private val context: Context) {
                 @Suppress("DEPRECATION") w.disconnect()
                 @Suppress("DEPRECATION") w.enableNetwork(netId, true)
                 @Suppress("DEPRECATION") w.reconnect()
-                Log.i(tag, "connectWifi: legacy path initiated for $ssid (netId=$netId)")
+                Log.i(tag, "connectWifi: legacy path initiated for $ssid (netId=$netId, sec=$security)")
                 return true
             }
             Log.w(tag, "connectWifi: addNetwork returned $netId for $ssid")
@@ -648,10 +691,12 @@ class StbBridge(private val context: Context) {
             Log.w(tag, "connectWifi legacy path failed", t)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && isRootAvailable()) {
-            val cmd = if (password.isNullOrEmpty())
-                "cmd wifi connect-network '${ssid.replace("'", "'\\''")}' open"
-            else
-                "cmd wifi connect-network '${ssid.replace("'", "'\\''")}' wpa2 '${password.replace("'", "'\\''")}'"
+            val esc = ssid.replace("'", "'\\''")
+            val cmd = when {
+                password.isNullOrEmpty() -> "cmd wifi connect-network '$esc' open"
+                else -> "cmd wifi connect-network '$esc' ${if (wantsWpa3) "wpa3" else "wpa2"} " +
+                    "'${password.replace("'", "'\\''")}'"
+            }
             return runSu(cmd) == 0
         }
         return false

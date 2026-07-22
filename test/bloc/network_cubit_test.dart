@@ -11,14 +11,16 @@ class FakeNetworkService extends StbNetworkService {
   List<WifiNetwork> scanResult = const [];
   bool connectResult = true;
   final connectCalls = <(String, String?)>[];
+  final connectSecurity = <String?>[];
 
   @override
   Future<StbNetworkStatus> status() async => next;
   @override
   Future<List<WifiNetwork>> scan() async => scanResult;
   @override
-  Future<bool> connect(String ssid, {String? password}) async {
+  Future<bool> connect(String ssid, {String? password, String? security}) async {
     connectCalls.add((ssid, password));
+    connectSecurity.add(security);
     return connectResult;
   }
 
@@ -87,6 +89,15 @@ void main() {
     final cubit = make(svc);
     await cubit.join('B', password: 'bad');
     expect(cubit.state.joinPhase, NetworkJoinPhase.failed);
+    await cubit.close();
+  });
+
+  test('join forwards the security type to the service', () async {
+    final svc = FakeNetworkService();
+    final cubit = make(svc);
+    svc.next = StbNetworkStatus.fromMaps(wifi: {'enabled': true, 'ssid': 'A', 'ip': '1.2.3.4'});
+    await cubit.join('A', password: 'pw', security: 'wpa3');
+    expect(svc.connectSecurity, ['wpa3']);
     await cubit.close();
   });
 

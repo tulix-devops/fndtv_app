@@ -3,12 +3,21 @@ import 'package:flutter/services.dart';
 import 'package:fndtv/src/core/services/stb_system_service.dart' show StbSystemService;
 
 /// A Wi-Fi network found by a scan. [level] is 1 (weak) – 4 (strong).
+/// [security] is the join type reported by the native scan: `open`, `wpa2`
+/// (also WEP/EAP best-effort), or `wpa3` (SAE-required APs only; WPA2/WPA3
+/// transition APs report `wpa2` since they join over the PSK path).
 class WifiNetwork {
   final String ssid;
   final bool secured;
   final int level;
+  final String security;
 
-  const WifiNetwork({required this.ssid, required this.secured, required this.level});
+  const WifiNetwork({
+    required this.ssid,
+    required this.secured,
+    required this.level,
+    this.security = 'open',
+  });
 
   factory WifiNetwork.fromMap(Map<Object?, Object?> map) {
     final rssi = (map['rssi'] as int?) ?? -100;
@@ -16,6 +25,7 @@ class WifiNetwork {
       ssid: (map['ssid'] as String?) ?? '',
       secured: (map['secured'] as bool?) ?? false,
       level: _bucket(rssi),
+      security: (map['security'] as String?) ?? 'open',
     );
   }
 
@@ -90,13 +100,15 @@ class StbNetworkService {
     }
   }
 
-  /// Initiates a join; the outcome is observed by polling [status].
-  Future<bool> connect(String ssid, {String? password}) async {
+  /// Initiates a join; the outcome is observed by polling [status]. [security]
+  /// is the scanned type (`open`/`wpa2`/`wpa3`) so the native side can pick SAE
+  /// for WPA3 networks.
+  Future<bool> connect(String ssid, {String? password, String? security}) async {
     if (!StbSystemService.isStb) return false;
     try {
       return await _channel.invokeMethod<bool>(
             'connectWifi',
-            {'ssid': ssid, 'password': password},
+            {'ssid': ssid, 'password': password, 'security': security},
           ) ??
           false;
     } catch (e) {
