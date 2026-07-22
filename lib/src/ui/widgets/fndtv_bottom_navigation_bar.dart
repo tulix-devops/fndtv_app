@@ -117,17 +117,24 @@ class _NavItem extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            // Label
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              style: GoogleFonts.sora(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: itemColor,
-                letterSpacing: 0.8,
+            // Label — kept to a single line and shrunk to fit so a long label
+            // (e.g. FR "À la demande") doesn't wrap and misalign the row.
+            SizedBox(
+              width: double.infinity,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
+                  style: GoogleFonts.sora(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: itemColor,
+                    letterSpacing: 0.8,
+                  ),
+                  child: Text(label, maxLines: 1, softWrap: false),
+                ),
               ),
-              child: Text(label),
             ),
           ],
         ),
