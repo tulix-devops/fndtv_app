@@ -21,7 +21,7 @@ abstract class DeviceRepository {
     String? osVersion,
   });
 
-  Future<DeviceUpdateModel?> checkUpdate(String deviceId);
+  Future<DeviceUpdateModel?> checkUpdate(String deviceId, {String? deviceToken});
 
   Future<({DeviceCheckinStatus status, DeviceCheckinModel? model})> checkin({
     required String deviceToken,
@@ -34,6 +34,7 @@ abstract class DeviceRepository {
 
   Future<bool> ackCommand({
     required String commandId,
+    required String deviceToken,
     required bool success,
     String? result,
   });
@@ -64,8 +65,8 @@ final class DeviceRepositoryImpl implements DeviceRepository {
   }
 
   @override
-  Future<DeviceUpdateModel?> checkUpdate(String deviceId) {
-    return _dataSource.checkUpdate(deviceId);
+  Future<DeviceUpdateModel?> checkUpdate(String deviceId, {String? deviceToken}) {
+    return _dataSource.checkUpdate(deviceId, deviceToken: deviceToken);
   }
 
   @override
@@ -90,11 +91,13 @@ final class DeviceRepositoryImpl implements DeviceRepository {
   @override
   Future<bool> ackCommand({
     required String commandId,
+    required String deviceToken,
     required bool success,
     String? result,
   }) {
     return _dataSource.ackCommand(
       commandId: commandId,
+      deviceToken: deviceToken,
       success: success,
       result: result,
     );

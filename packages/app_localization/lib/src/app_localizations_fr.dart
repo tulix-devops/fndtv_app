@@ -319,4 +319,11 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get offlineCta => 'Configurer le réseau';
+
+  @override
+  String get kioskLockTitle => 'Cet appareil est verrouillé';
+
+  @override
+  String get kioskLockMessage =>
+      'Veuillez contacter le support pour rétablir l\'accès.';
 }

@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fndtv/src/index.dart';
+import 'package:fndtv/src/core/services/kiosk_lock_controller.dart';
+import 'package:fndtv/src/core/services/update_installer.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:app_localization/app_localization.dart';
 import 'package:media_kit/media_kit.dart';
@@ -126,6 +128,17 @@ class _SplashPageState extends State<SplashPage> {
       unawaited(stb.syncTimezone());
       unawaited(stb.logDiagnostics());
       unawaited(stb.runStartupMaintenance());
+
+      // Storage is initialized above, so it's safe to restore the persisted
+      // kiosk-lock state now and begin the MDM check-in poll loop (which
+      // surfaces + executes any commands queued from the admin console).
+      unawaited(context.read<KioskLockController>().restore());
+      context.read<DeviceRegistrationHandler>().startCommandPolling();
+
+      // Reclaim space from a previously downloaded update APK — after a
+      // successful update the box has relaunched into the new build, so the
+      // leftover file is dead weight. Safe at startup: no install in flight.
+      unawaited(UpdateInstaller().cleanupDownloadedApk());
     }
 
     await context.read<AppCubit>().init();

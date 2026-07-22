@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:app_logger/app_logger.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:fndtv/src/core/services/device_identity_service.dart';
+import 'package:fndtv/src/core/services/mdm_command_executor.dart';
 import 'package:fndtv/src/data/data_sources/device/device_data_source.dart';
 import 'package:fndtv/src/data/models/device/device_checkin_model.dart';
 import 'package:fndtv/src/data/repositories/device/device_repository.dart';
@@ -21,13 +23,19 @@ class DeviceRegistrationHandler {
     required DeviceIdentityService deviceIdentityService,
     required DeviceRepository deviceRepository,
     required LocalStorage localStorage,
+    MdmCommandExecutor? commandExecutor,
   })  : _identity = deviceIdentityService,
         _repo = deviceRepository,
-        _storage = localStorage;
+        _storage = localStorage,
+        _executor = commandExecutor;
 
   final DeviceIdentityService _identity;
   final DeviceRepository _repo;
   final LocalStorage _storage;
+
+  /// Executes MDM commands returned by check-in. Null on non-STB flavors (no
+  /// executor is wired), in which case commands are only logged.
+  final MdmCommandExecutor? _executor;
 
   /// Persisted unique debug MAC (see [_debugUniqueMac]).
   static const String _debugMacKey = 'stb_debug_mac';
@@ -37,9 +45,50 @@ class DeviceRegistrationHandler {
   /// collides on the backend (which dedupes devices by MAC).
   static const String _anonymizedMac = '02:00:00:00:00:00';
 
+  /// MDM check-in poll interval. Fast in debug so commands enqueued from the
+  /// admin console show up within seconds while testing; a sane, jittered
+  /// cadence in release so a whole fleet doesn't hammer the backend.
+  static const Duration _debugPollInterval = Duration(seconds: 10);
+  static const Duration _releasePollBase = Duration(minutes: 3);
+
+  Timer? _pollTimer;
+
   Future<void> registerOnInit() async {
     await _provisionIfNeeded();
     await _checkinIfProvisioned();
+  }
+
+  /// Starts the periodic MDM check-in loop (provision first, then poll). Safe to
+  /// call once at app init; subsequent calls are ignored. Stops via [dispose].
+  void startCommandPolling() {
+    if (_pollTimer != null) return;
+
+    void schedule() {
+      final interval = kDebugMode
+          ? _debugPollInterval
+          // release: base ± up to 30s jitter to de-sync the fleet.
+          : _releasePollBase +
+              Duration(seconds: Random().nextInt(61) - 30);
+      _pollTimer = Timer(interval, () async {
+        // Provision-if-needed BEFORE checking in: a check-in that rejected the
+        // token (401) clears it, so re-provisioning here (idempotent, via the
+        // API key) mints a fresh token and the box self-heals within one poll
+        // cycle instead of staying dead until a reboot. A no-op when a valid
+        // token is already present.
+        await _provisionIfNeeded();
+        await _checkinIfProvisioned();
+        schedule();
+      });
+    }
+
+    logger.i('[STB] MDM polling started '
+        '(${kDebugMode ? '${_debugPollInterval.inSeconds}s debug' : '~${_releasePollBase.inMinutes}min release'}).');
+    schedule();
+  }
+
+  void dispose() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
   }
 
   /// Self-provisions the box via `POST /api/provision` (scoped API key) and
@@ -118,8 +167,8 @@ class DeviceRegistrationHandler {
   /// provisioning-minted device token is present in storage; silently skipped
   /// otherwise (an un-provisioned box has no token yet).
   ///
-  /// Command execution/ack is not wired yet — pending commands are only
-  /// logged; the backend redelivers them until acked.
+  /// Any pending commands are handed to the [MdmCommandExecutor], which runs
+  /// and acks them; unacked commands are redelivered on the next check-in.
   Future<void> _checkinIfProvisioned() async {
     try {
       final token = await _storage.get<String>(kStbDeviceTokenKey);
@@ -145,6 +194,9 @@ class DeviceRegistrationHandler {
             '${model.commands.length} pending command(s)'
             '${model.commands.isEmpty ? '' : ': ${model.commands.map((c) => c.type).join(', ')}'}',
           );
+          if (model.commands.isNotEmpty && _executor != null) {
+            await _executor.executeAll(model.commands);
+          }
         case DeviceCheckinStatus.unauthorized:
           // Token rejected — drop it so the box re-provisions next launch.
           await _storage.store<String>(kStbDeviceTokenKey, '');

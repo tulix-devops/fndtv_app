@@ -21,7 +21,7 @@ class StbPowerGuard extends StatefulWidget {
 }
 
 class _StbPowerGuardState extends State<StbPowerGuard> {
-  static const Duration _idleTimeout = Duration(minutes: 20);
+  static const Duration _idleTimeout = Duration(hours: 3);
   static const int _countdownSeconds = 20;
 
   final StbSystemService _stb = StbSystemService();

@@ -317,4 +317,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get offlineCta => 'Set up network';
+
+  @override
+  String get kioskLockTitle => 'This device is locked';
+
+  @override
+  String get kioskLockMessage => 'Please contact support to restore access.';
 }

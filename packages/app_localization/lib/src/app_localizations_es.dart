@@ -318,4 +318,11 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get offlineCta => 'Configurar red';
+
+  @override
+  String get kioskLockTitle => 'Este dispositivo está bloqueado';
+
+  @override
+  String get kioskLockMessage =>
+      'Comuníquese con soporte para restablecer el acceso.';
 }

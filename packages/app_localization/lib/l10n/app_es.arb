@@ -113,5 +113,7 @@
   "networkWiredWarnConfirm": "Cambiar igualmente",
   "networkWiredWarnCancel": "Cancelar",
   "offlineTitle": "Sin conexión a Internet",
-  "offlineCta": "Configurar red"
+  "offlineCta": "Configurar red",
+  "kioskLockTitle": "Este dispositivo está bloqueado",
+  "kioskLockMessage": "Comuníquese con soporte para restablecer el acceso."
 }

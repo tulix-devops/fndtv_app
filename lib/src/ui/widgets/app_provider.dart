@@ -14,7 +14,10 @@ import 'package:fndtv/src/bloc/network_cubit/network_cubit.dart';
 import 'package:fndtv/src/bloc/theme_cubit/theme_cubit.dart';
 import 'package:fndtv/src/core/core.dart';
 import 'package:fndtv/src/core/services/connectivity_observer.dart';
+import 'package:fndtv/src/core/services/kiosk_lock_controller.dart';
+import 'package:fndtv/src/core/services/mdm_command_executor.dart';
 import 'package:fndtv/src/core/services/stb_network_service.dart';
+import 'package:fndtv/src/core/services/update_progress_controller.dart';
 import 'package:fndtv/src/data/data_sources/device/device_data_source.dart';
 import 'package:fndtv/src/data/repositories/device/device_repository.dart';
 import 'package:ui_kit/ui_kit.dart';
@@ -41,12 +44,44 @@ class _AppProviderState extends State<AppProvider> {
   late final DeviceRepositoryImpl _deviceRepository = DeviceRepositoryImpl(
     dataSource: DeviceDataSource(),
   );
+
+  // Kiosk-lock state, driven by MDM KIOSK_LOCK/KIOSK_UNLOCK commands. Provided
+  // to the tree so the lock overlay can render it. STB-relevant only.
+  late final KioskLockController _kioskLockController = KioskLockController(
+    localStorage: _localStorage,
+  );
+
+  // Drives the on-screen "Updating…" overlay during an MDM UPDATE_APP download.
+  late final UpdateProgressController _updateProgressController =
+      UpdateProgressController();
+
+  // Executes MDM commands returned by check-in. STB-only — non-STB flavors get
+  // no executor, so commands (there won't be any) are merely logged.
+  late final MdmCommandExecutor? _commandExecutor = StbSystemService.isStb
+      ? MdmCommandExecutor(
+          deviceRepository: _deviceRepository,
+          systemService: StbSystemService(),
+          kioskLockController: _kioskLockController,
+          localStorage: _localStorage,
+          updateProgressController: _updateProgressController,
+        )
+      : null;
+
   late final DeviceRegistrationHandler _deviceRegistrationHandler =
       DeviceRegistrationHandler(
     deviceIdentityService: DeviceIdentityService(),
     deviceRepository: _deviceRepository,
     localStorage: _localStorage,
+    commandExecutor: _commandExecutor,
   );
+
+  @override
+  void dispose() {
+    _deviceRegistrationHandler.dispose();
+    _kioskLockController.dispose();
+    _updateProgressController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +105,12 @@ class _AppProviderState extends State<AppProvider> {
         ),
         RepositoryProvider<DeviceRepository>(
           create: (ctx) => _deviceRepository,
+        ),
+        RepositoryProvider<KioskLockController>(
+          create: (ctx) => _kioskLockController,
+        ),
+        RepositoryProvider<UpdateProgressController>(
+          create: (ctx) => _updateProgressController,
         ),
         // RepositoryProvider<FirebaseService>(
         //   lazy: false,

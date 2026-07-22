@@ -13,7 +13,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:fndtv/src/index.dart';
 import 'package:fndtv/src/core/services/app_route_tracker.dart';
 import 'package:fndtv/src/ui/widgets/stb/stb_power_guard.dart';
+import 'package:fndtv/src/ui/widgets/stb/tv_kiosk_lock_overlay.dart';
 import 'package:fndtv/src/ui/widgets/stb/tv_offline_overlay.dart';
+import 'package:fndtv/src/ui/widgets/stb/tv_update_overlay.dart';
 import 'package:fndtv/src/ui/app_view.dart';
 import 'package:fndtv/src/ui/pages/main/main_container_page.dart';
 import 'package:fndtv/src/ui/pages/live_detail/new_live_detail_page.dart';
@@ -96,6 +98,12 @@ class _AppState extends State<App> {
                             children: [
                               child ?? const SizedBox.shrink(),
                               const TvOfflineOverlay(),
+                              // Progress while an MDM UPDATE_APP downloads/installs.
+                              const TvUpdateOverlay(),
+                              // Kiosk lock sits above everything, including the
+                              // offline overlay — a locked box stays blocked
+                              // whether or not it has internet.
+                              const TvKioskLockOverlay(),
                             ],
                           ),
                         )

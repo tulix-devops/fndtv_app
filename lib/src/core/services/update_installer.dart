@@ -13,22 +13,55 @@ class UpdateInstaller {
 
   final Dio _dio = Dio();
 
+  /// Resolves the single, reused APK download location
+  /// (`<external-files>/apk/update.apk`), creating the directory if needed.
+  /// One fixed filename means each download overwrites the last — the store
+  /// never accumulates more than one APK.
+  Future<File> _apkFile() async {
+    final baseDir = await getExternalStorageDirectory() ??
+        await getApplicationSupportDirectory();
+    final apkDir = Directory('${baseDir.path}/apk');
+    if (!apkDir.existsSync()) apkDir.createSync(recursive: true);
+    return File('${apkDir.path}/update.apk');
+  }
+
+  /// Deletes any leftover downloaded APK. Safe to call at app startup: after a
+  /// successful update the box has relaunched into the new build, so the file
+  /// is dead weight; after a failed/cancelled install it's stale. Never called
+  /// mid-install (the system installer needs the file until it finishes), so
+  /// startup is the safe moment to reclaim the space.
+  Future<void> cleanupDownloadedApk() async {
+    try {
+      final file = await _apkFile();
+      if (file.existsSync()) {
+        await file.delete();
+        logger.i('[STB] Removed leftover update APK: ${file.path}');
+      }
+    } catch (e) {
+      logger.w('[STB] Update APK cleanup error: $e');
+    }
+  }
+
   /// Downloads [url] to a FileProvider-accessible location, reporting progress
   /// in the range 0..1. Returns the saved file path.
+  ///
+  /// `GET /api/app-version/{id}/apk` is scoped to the per-device Bearer token,
+  /// so [deviceToken] must be the provisioning-minted device token — without it
+  /// the download is rejected with 401.
   Future<String> download(
     String url, {
     required void Function(double progress) onProgress,
+    String? deviceToken,
   }) async {
-    final baseDir =
-        await getExternalStorageDirectory() ?? await getApplicationSupportDirectory();
-    final apkDir = Directory('${baseDir.path}/apk');
-    if (!apkDir.existsSync()) apkDir.createSync(recursive: true);
-    final path = '${apkDir.path}/update.apk';
+    final path = (await _apkFile()).path;
 
     logger.i('[STB] Downloading update: $url -> $path');
     await _dio.download(
       url,
       path,
+      options: (deviceToken != null && deviceToken.isNotEmpty)
+          ? Options(headers: {'Authorization': 'Bearer $deviceToken'})
+          : null,
       onReceiveProgress: (received, total) {
         if (total > 0) onProgress(received / total);
       },

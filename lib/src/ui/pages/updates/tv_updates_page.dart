@@ -48,8 +48,11 @@ class _TvUpdatesPageState extends State<TvUpdatesPage> {
       _downloaded = false;
     });
 
+    final deviceToken =
+        await context.read<LocalStorage>().get<String>(kStbDeviceTokenKey);
     try {
-      final path = await _installer.download(url, onProgress: (p) {
+      final path = await _installer.download(url, deviceToken: deviceToken,
+          onProgress: (p) {
         if (mounted) setState(() => _downloadProgress = p);
       });
       final ok = await _installer.verify(path, _model?.apkSha256);
@@ -100,7 +103,8 @@ class _TvUpdatesPageState extends State<TvUpdatesPage> {
       return;
     }
 
-    final model = await repo.checkUpdate(deviceId);
+    final deviceToken = await storage.get<String>(kStbDeviceTokenKey);
+    final model = await repo.checkUpdate(deviceId, deviceToken: deviceToken);
     if (!mounted) return;
     setState(() {
       _model = model;

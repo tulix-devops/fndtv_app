@@ -118,15 +118,20 @@ final class DeviceDataSource {
   }
 
   /// Checks whether a newer app build is available for [deviceId], or null if
-  /// the check couldn't be completed. Sends the setopbox API key (harmless if
-  /// the endpoint is public; required if it isn't).
-  Future<DeviceUpdateModel?> checkUpdate(String deviceId) async {
+  /// the check couldn't be completed. `GET /api/device/{id}/update` is scoped to
+  /// the per-device Bearer token (not the setopbox API key), so [deviceToken]
+  /// must be the provisioning-minted device token.
+  Future<DeviceUpdateModel?> checkUpdate(
+    String deviceId, {
+    String? deviceToken,
+  }) async {
     try {
       final response = await _client.get(
         Uri.parse(APIList.deviceUpdate(deviceId)),
         headers: {
           'Accept': 'application/json',
-          if (_apiKeyAuth case final auth?) 'Authorization': auth,
+          if (deviceToken != null && deviceToken.isNotEmpty)
+            'Authorization': 'Bearer $deviceToken',
         },
       );
 
@@ -207,10 +212,13 @@ final class DeviceDataSource {
   }
 
   /// Acknowledges an executed MDM command (`POST /command/{id}/ack`) with
-  /// `ACKED` on [success], `FAILED` otherwise. Returns true if the backend
+  /// `ACKED` on [success], `FAILED` otherwise. Authenticated with the box's own
+  /// per-device Bearer [deviceToken] (the endpoint is `deviceBearer`-scoped — a
+  /// device may only ack commands issued to itself). Returns true if the backend
   /// accepted the ack. Unacked commands are redelivered on the next check-in.
   Future<bool> ackCommand({
     required String commandId,
+    required String deviceToken,
     required bool success,
     String? result,
   }) async {
@@ -220,6 +228,7 @@ final class DeviceDataSource {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          'Authorization': 'Bearer $deviceToken',
         },
         body: jsonEncode(<String, dynamic>{
           'status': success ? 'ACKED' : 'FAILED',

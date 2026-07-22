@@ -113,5 +113,7 @@
   "networkWiredWarnConfirm": "Changer quand même",
   "networkWiredWarnCancel": "Annuler",
   "offlineTitle": "Pas de connexion Internet",
-  "offlineCta": "Configurer le réseau"
+  "offlineCta": "Configurer le réseau",
+  "kioskLockTitle": "Cet appareil est verrouillé",
+  "kioskLockMessage": "Veuillez contacter le support pour rétablir l'accès."
 }

@@ -113,5 +113,7 @@
   "networkWiredWarnConfirm": "Switch anyway",
   "networkWiredWarnCancel": "Cancel",
   "offlineTitle": "No internet connection",
-  "offlineCta": "Set up network"
+  "offlineCta": "Set up network",
+  "kioskLockTitle": "This device is locked",
+  "kioskLockMessage": "Please contact support to restore access."
 }

@@ -705,6 +705,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Set up network'**
   String get offlineCta;
+
+  /// No description provided for @kioskLockTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This device is locked'**
+  String get kioskLockTitle;
+
+  /// No description provided for @kioskLockMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Please contact support to restore access.'**
+  String get kioskLockMessage;
 }
 
 class _AppLocalizationsDelegate
