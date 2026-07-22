@@ -13,7 +13,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:fndtv/src/index.dart';
 import 'package:fndtv/src/core/services/app_route_tracker.dart';
 import 'package:fndtv/src/ui/widgets/stb/stb_power_guard.dart';
-import 'package:fndtv/src/ui/widgets/stb/tv_identity_badge.dart';
 import 'package:fndtv/src/ui/widgets/stb/tv_offline_overlay.dart';
 import 'package:fndtv/src/ui/app_view.dart';
 import 'package:fndtv/src/ui/pages/main/main_container_page.dart';
@@ -88,14 +87,14 @@ class _AppState extends State<App> {
                 debugShowCheckedModeBanner: false,
                 navigatorKey: appNavigatorKey,
                 navigatorObservers: [AppRouteTracker()],
-                // STB: power guard + global identity badge + offline overlay,
-                // stacked over every route.
+                // STB: power guard + offline overlay, stacked over every route.
+                // The device serial now lives in the top-right clock block
+                // (TvClock) and the Network page, so there's no separate badge.
                 builder: StbSystemService.isStb
                     ? (context, child) => StbPowerGuard(
                           child: Stack(
                             children: [
                               child ?? const SizedBox.shrink(),
-                              const TvIdentityBadge(),
                               const TvOfflineOverlay(),
                             ],
                           ),
