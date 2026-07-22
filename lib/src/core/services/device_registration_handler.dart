@@ -9,14 +9,13 @@ import 'package:fndtv/src/data/repositories/device/device_repository.dart';
 import 'package:local_storage/local_storage.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
-/// Reads the set-top box identity (serial number, Wi-Fi MAC, OS version) and
-/// registers it with the box provisioning backend on app initialization, then
-/// checks in if the box holds a provisioning-minted device token.
+/// Self-provisions the set-top box (`POST /api/provision`) on app init — the box
+/// posts its hardware identity with the scoped API key and receives its
+/// per-device token, which is stored and then used to check in.
 ///
 /// Designed to be called fire-and-forget from the splash screen: it never
-/// throws, logs every step, and only registers once per serial (a 201 or a 409
-/// "already registered" both mark it done, so it won't re-POST on later
-/// launches).
+/// throws, logs every step, and only provisions once (skips when a device token
+/// is already stored — provisioning is idempotent anyway).
 class DeviceRegistrationHandler {
   DeviceRegistrationHandler({
     required DeviceIdentityService deviceIdentityService,
@@ -30,8 +29,6 @@ class DeviceRegistrationHandler {
   final DeviceRepository _repo;
   final LocalStorage _storage;
 
-  static const String _registeredSerialKey = 'stb_registered_serial';
-
   /// Persisted unique debug MAC (see [_debugUniqueMac]).
   static const String _debugMacKey = 'stb_debug_mac';
 
@@ -41,38 +38,38 @@ class DeviceRegistrationHandler {
   static const String _anonymizedMac = '02:00:00:00:00:00';
 
   Future<void> registerOnInit() async {
-    await _registerIfNeeded();
+    await _provisionIfNeeded();
     await _checkinIfProvisioned();
   }
 
-  /// Interim self-registration (operator-authorised). Per the Box API design,
-  /// registration is a warehouse action and boxes should instead arrive with a
-  /// device token — this stays until that provisioning flow exists.
-  Future<void> _registerIfNeeded() async {
+  /// Self-provisions the box via `POST /api/provision` (scoped API key) and
+  /// stores the returned device token + id. Skips when a token is already
+  /// present. Idempotent server-side, so a retry after a partial failure is
+  /// safe.
+  Future<void> _provisionIfNeeded() async {
     try {
-      final serial = await _identity.getSerialNumber();
-      if (serial.isEmpty) {
-        logger.w('[STB] No serial number available; skipping registration.');
+      // Already have a device token — provisioned; nothing to do.
+      final existingToken = await _storage.get<String>(kStbDeviceTokenKey);
+      if (existingToken != null && existingToken.isNotEmpty) {
+        logger.d('[STB] Device token present; skipping provisioning.');
         return;
       }
 
-      // Already registered this exact serial — nothing to do.
-      final registered = await _storage.get<String>(_registeredSerialKey);
-      if (registered == serial) {
-        logger.d('[STB] Serial already registered; skipping.');
+      final serial = await _identity.getSerialNumber();
+      if (serial.isEmpty) {
+        logger.w('[STB] No serial number available; skipping provisioning.');
         return;
       }
 
       var macWifi = await _identity.getWifiMac();
       final osVersion = await _identity.getOsVersion();
+      final model = await _identity.getDeviceModel();
 
       // Emulators / debug builds can't expose a real, unique Wi-Fi MAC (privacy
-      // randomization returns an empty or anonymized value). The backend dedupes
-      // devices by MAC, so a shared placeholder makes every debug install after
-      // the first collide (409 DEVICE_EXISTS) and never obtain a device_id —
-      // which breaks update checks. Use a MAC generated once per install and
-      // persisted. Release builds on real boxes keep sending the real hardware
-      // MAC read natively.
+      // randomization returns an empty or anonymized value). Provisioning
+      // dedupes by hardware, so a shared placeholder collides. Use a MAC
+      // generated once per install and persisted. Release builds on real boxes
+      // send the real hardware MAC read natively.
       if (kDebugMode &&
           (macWifi.isEmpty || macWifi.toLowerCase() == _anonymizedMac)) {
         macWifi = await _debugUniqueMac();
@@ -80,36 +77,46 @@ class DeviceRegistrationHandler {
       }
 
       logger.i(
-        '[STB] Registering — serial: $serial, mac: $macWifi, os: $osVersion',
+        '[STB] Provisioning — serial: $serial, mac: $macWifi, model: $model, '
+        'os: $osVersion',
       );
 
-      final result = await _repo.registerSetTopBox(
+      final result = await _repo.provisionDevice(
         serialNumber: serial,
         macWifi: macWifi,
+        model: model,
         osVersion: osVersion,
       );
 
       switch (result.status) {
-        case DeviceRegisterResult.registered:
-        case DeviceRegisterResult.alreadyRegistered:
-          await _storage.store<String>(_registeredSerialKey, serial);
+        case ProvisionStatus.provisioned:
+          final token = result.deviceToken;
+          if (token != null && token.isNotEmpty) {
+            await _storage.store<String>(kStbDeviceTokenKey, token);
+            logger.i('[STB] Device token stored — check-in enabled.');
+          } else {
+            logger.w('[STB] Provisioned but no device_token in the response — '
+                'verify the 201 field names against the backend.');
+          }
           if (result.deviceId != null) {
             await _storage.store<String>(kStbDeviceIdKey, result.deviceId!);
             logger.i('[STB] Device id stored: ${result.deviceId}');
           }
-          logger.i('[STB] Registration done (${result.status}).');
-        case DeviceRegisterResult.failed:
-          logger.w('[STB] Registration failed; will retry next launch.');
+        case ProvisionStatus.unauthorized:
+        case ProvisionStatus.forbidden:
+        case ProvisionStatus.failed:
+          logger.w('[STB] Provisioning not completed (${result.status}); '
+              'will retry next launch.');
       }
     } catch (e, st) {
-      logger.e('[STB] Registration handler error: $e', stacktrace: st);
+      logger.e('[STB] Provisioning handler error: $e', stacktrace: st);
     }
   }
 
   /// Runtime heartbeat (`POST /device/checkin`) — reports installed version and
   /// identity, and surfaces pending MDM commands. Runs only when a
   /// provisioning-minted device token is present in storage; silently skipped
-  /// otherwise (self-registered boxes have no token yet).
+  /// otherwise (an un-provisioned box has no token yet).
   ///
   /// Command execution/ack is not wired yet — pending commands are only
   /// logged; the backend redelivers them until acked.
@@ -139,6 +146,9 @@ class DeviceRegistrationHandler {
             '${model.commands.isEmpty ? '' : ': ${model.commands.map((c) => c.type).join(', ')}'}',
           );
         case DeviceCheckinStatus.unauthorized:
+          // Token rejected — drop it so the box re-provisions next launch.
+          await _storage.store<String>(kStbDeviceTokenKey, '');
+          logger.w('[STB] Check-in token rejected — cleared; will re-provision.');
         case DeviceCheckinStatus.unassigned:
         case DeviceCheckinStatus.suspended:
         case DeviceCheckinStatus.failed:

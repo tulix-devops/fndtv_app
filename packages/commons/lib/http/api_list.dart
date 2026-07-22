@@ -25,12 +25,14 @@ class APIList {
     return date != null ? '$base?date=$date' : base;
   }
 
-  /// Registers this set-top box on app init. POST body:
-  /// `{ serial_number, mac_wifi, os_version }`, authenticated with the setopbox
-  /// API key (`Authorization: Bearer <FNDTV_SETOPBOX_API_KEY>`) — this replaces
-  /// the old operator-credential login. Returns 201 on success, 409 if the box
-  /// is already registered.
-  static String get registerDevice => '$_boxUrl/device/register';
+  /// Box self-provisioning (`POST /api/provision`) — the box registers itself
+  /// on first boot with `{ serial_number, mac_wifi, android_id, model,
+  /// os_version }` authenticated by the scoped setopbox API key
+  /// (`Authorization: Bearer <FNDTV_SETOPBOX_API_KEY>`, scope `device:provision`).
+  /// Idempotent: same hardware reuses the same device. 201 → mints + returns the
+  /// per-device token + runtime config. 401 bad/revoked key, 403 missing scope.
+  /// (Note: `/device/register` is the operator-cookie path and is NOT used here.)
+  static String get deviceProvision => '$_boxUrl/provision';
 
   /// Checks whether the box needs a newer app build. GET by device id (the UUID
   /// from registration) → the latest version, an `update_required` flag, and

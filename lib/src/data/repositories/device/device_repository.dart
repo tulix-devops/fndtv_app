@@ -7,16 +7,18 @@ import 'package:fndtv/src/data/models/device/device_update_model.dart';
 const String kStbDeviceIdKey = 'stb_device_id';
 
 /// Local-storage key holding the per-device Bearer token minted by the backend
-/// at provisioning (device status PROVISIONED/READY_TO_SHIP). Authorises
-/// `/device/checkin`. Absent on boxes that were never provisioned — check-in
-/// is skipped until the provisioning flow lands it here.
+/// at self-provisioning (`POST /api/provision`). Authorises `/device/checkin`.
+/// Absent until the box has provisioned — check-in is skipped until it's here.
 const String kStbDeviceTokenKey = 'stb_device_token';
 
 abstract class DeviceRepository {
-  Future<({DeviceRegisterResult status, String? deviceId})> registerSetTopBox({
+  Future<({ProvisionStatus status, String? deviceToken, String? deviceId})>
+      provisionDevice({
     required String serialNumber,
-    required String macWifi,
-    required String osVersion,
+    String? macWifi,
+    String? androidId,
+    String? model,
+    String? osVersion,
   });
 
   Future<DeviceUpdateModel?> checkUpdate(String deviceId);
@@ -44,14 +46,19 @@ final class DeviceRepositoryImpl implements DeviceRepository {
   final DeviceDataSource _dataSource;
 
   @override
-  Future<({DeviceRegisterResult status, String? deviceId})> registerSetTopBox({
+  Future<({ProvisionStatus status, String? deviceToken, String? deviceId})>
+      provisionDevice({
     required String serialNumber,
-    required String macWifi,
-    required String osVersion,
+    String? macWifi,
+    String? androidId,
+    String? model,
+    String? osVersion,
   }) {
-    return _dataSource.registerSetTopBox(
+    return _dataSource.provisionDevice(
       serialNumber: serialNumber,
       macWifi: macWifi,
+      androidId: androidId,
+      model: model,
       osVersion: osVersion,
     );
   }

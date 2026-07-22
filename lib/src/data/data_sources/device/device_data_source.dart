@@ -7,15 +7,18 @@ import 'package:fndtv/src/data/models/device/device_checkin_model.dart';
 import 'package:fndtv/src/data/models/device/device_update_model.dart';
 import 'package:http/http.dart' as http;
 
-/// Outcome of a set-top box registration attempt.
-enum DeviceRegisterResult {
-  /// HTTP 201 — the box was registered.
-  registered,
+/// Outcome of a set-top box self-provisioning attempt (`POST /api/provision`).
+enum ProvisionStatus {
+  /// HTTP 201 — device registered/reused; token + config returned.
+  provisioned,
 
-  /// HTTP 409 — the box was already registered (treated as done).
-  alreadyRegistered,
+  /// HTTP 401 — API key missing, invalid, or revoked.
+  unauthorized,
 
-  /// Login failed, any other status, or a transport error — retry next launch.
+  /// HTTP 403 — API key lacks the `device:provision` scope.
+  forbidden,
+
+  /// Any other status or a transport error — retry next launch.
   failed,
 }
 
@@ -48,22 +51,30 @@ final class DeviceDataSource {
     return 'Bearer ${AppConfig.setopboxApiKey}';
   }
 
-  /// Registers the box. On success (201) the response carries the backend
-  /// `device_id` (a UUID) — returned here so it can be persisted for later
-  /// update checks. The 409 "already registered" response does NOT include it.
-  Future<({DeviceRegisterResult status, String? deviceId})> registerSetTopBox({
+  /// Self-provisions the box (`POST /api/provision`). Idempotent: same hardware
+  /// reuses the same device. On success (201) the backend mints and returns the
+  /// per-device token (+ device id + runtime config) — the token is what
+  /// authorises later check-ins.
+  ///
+  /// The 201 response field names are NOT published in the OpenAPI docs, so the
+  /// token/id are parsed defensively (common key variants) — confirm against a
+  /// real backend response and tighten.
+  Future<({ProvisionStatus status, String? deviceToken, String? deviceId})>
+      provisionDevice({
     required String serialNumber,
-    required String macWifi,
-    required String osVersion,
+    String? macWifi,
+    String? androidId,
+    String? model,
+    String? osVersion,
   }) async {
     try {
       final auth = _apiKeyAuth;
       if (auth == null) {
-        return (status: DeviceRegisterResult.failed, deviceId: null);
+        return (status: ProvisionStatus.failed, deviceToken: null, deviceId: null);
       }
 
       final response = await _client.post(
-        Uri.parse(APIList.registerDevice),
+        Uri.parse(APIList.deviceProvision),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -71,28 +82,38 @@ final class DeviceDataSource {
         },
         body: jsonEncode(<String, dynamic>{
           'serial_number': serialNumber,
-          'mac_wifi': macWifi,
-          'os_version': osVersion,
+          if (macWifi != null && macWifi.isNotEmpty) 'mac_wifi': macWifi,
+          if (androidId != null && androidId.isNotEmpty) 'android_id': androidId,
+          if (model != null && model.isNotEmpty) 'model': model,
+          if (osVersion != null && osVersion.isNotEmpty) 'os_version': osVersion,
         }),
       );
 
       switch (response.statusCode) {
         case 201:
+          final json = jsonDecode(response.body);
           return (
-            status: DeviceRegisterResult.registered,
-            deviceId: _extractDeviceId(response.body),
+            status: ProvisionStatus.provisioned,
+            deviceToken: _extractString(json, const [
+              'device_token',
+              'token',
+              'bearer',
+            ]),
+            deviceId: _extractString(json, const ['device_id', 'id']),
           );
-        case 409:
-          return (status: DeviceRegisterResult.alreadyRegistered, deviceId: null);
+        case 401:
+          logger.w('[STB] provision unauthorized (bad/revoked key): ${response.body}');
+          return (status: ProvisionStatus.unauthorized, deviceToken: null, deviceId: null);
+        case 403:
+          logger.w('[STB] provision forbidden (key lacks device:provision scope): ${response.body}');
+          return (status: ProvisionStatus.forbidden, deviceToken: null, deviceId: null);
         default:
-          logger.w(
-            '[STB] register HTTP ${response.statusCode}: ${response.body}',
-          );
-          return (status: DeviceRegisterResult.failed, deviceId: null);
+          logger.w('[STB] provision HTTP ${response.statusCode}: ${response.body}');
+          return (status: ProvisionStatus.failed, deviceToken: null, deviceId: null);
       }
     } catch (e) {
-      logger.w('[STB] register request error: $e');
-      return (status: DeviceRegisterResult.failed, deviceId: null);
+      logger.w('[STB] provision request error: $e');
+      return (status: ProvisionStatus.failed, deviceToken: null, deviceId: null);
     }
   }
 
@@ -217,13 +238,13 @@ final class DeviceDataSource {
     }
   }
 
-  String? _extractDeviceId(String body) {
-    try {
-      final json = jsonDecode(body);
-      if (json is Map && json['device_id'] is String) {
-        return json['device_id'] as String;
-      }
-    } catch (_) {}
+  /// First non-empty string value among [keys] in a decoded JSON map.
+  String? _extractString(Object? json, List<String> keys) {
+    if (json is! Map) return null;
+    for (final key in keys) {
+      final v = json[key];
+      if (v is String && v.isNotEmpty) return v;
+    }
     return null;
   }
 }
