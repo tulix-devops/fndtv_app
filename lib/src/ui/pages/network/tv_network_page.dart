@@ -172,6 +172,11 @@ class _TvNetworkPageState extends State<TvNetworkPage> {
       trailing: _ModeButton(
         label: net.scanning ? l.networkScanning : l.networkScan,
         active: false,
+        // Guarantee exactly one autofocus target: the Wi-Fi mode button takes
+        // it when the box can manage Wi-Fi; otherwise those buttons aren't
+        // rendered, so Scan must take it — else the page opens with no focused
+        // element and the first D-pad press has nowhere to go.
+        autofocus: !net.canManage,
         onTap: net.scanning ? null : () => context.read<NetworkCubit>().scan(),
       ),
       children: [

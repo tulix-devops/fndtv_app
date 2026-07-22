@@ -28,13 +28,21 @@ class TvIdentityBadge extends StatelessWidget {
             return Positioned(
               top: 48,
               right: 24,
-              child: IgnorePointer(
-                child: Text(
-                  parts.join(' · '),
-                  style: GoogleFonts.sora(
-                    fontSize: 11,
-                    color: Colors.white38,
-                    fontWeight: FontWeight.w600,
+              // Wrapped in a transparent Material: the badge is mounted in the
+              // MaterialApp.builder Stack, OUTSIDE any Scaffold/Material, so a
+              // bare Text renders with Flutter's yellow "no default text style"
+              // debug underline. Material supplies a proper DefaultTextStyle.
+              child: Material(
+                type: MaterialType.transparency,
+                child: IgnorePointer(
+                  child: Text(
+                    parts.join(' · '),
+                    style: GoogleFonts.sora(
+                      fontSize: 11,
+                      color: Colors.white38,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.none,
+                    ),
                   ),
                 ),
               ),
