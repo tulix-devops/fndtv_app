@@ -1,3 +1,4 @@
+import 'package:app_localization/app_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fndtv/src/bloc/device_identity_cubit/device_identity_cubit.dart';
@@ -5,8 +6,10 @@ import 'package:fndtv/src/core/services/app_route_tracker.dart';
 import 'package:fndtv/src/index.dart' show VideoPlayerPage;
 import 'package:google_fonts/google_fonts.dart';
 
-/// One dim line under the TV clock, on every screen: `MAC … · SN …`.
-/// Support asks the customer to read the top-right corner — that's this.
+/// A labelled identity block in the bottom-right corner, on every screen:
+/// `Serial number: … / MAC address: …`. Support asks the customer to read it
+/// off the corner, so it's a clear white-on-dark card, not a dim overlay.
+/// Hidden over fullscreen video. Labels are localized (en/es/fr).
 class TvIdentityBadge extends StatelessWidget {
   const TvIdentityBadge({super.key});
 
@@ -21,27 +24,38 @@ class TvIdentityBadge extends StatelessWidget {
             if (!id.loaded || (id.mac.isEmpty && id.serial.isEmpty)) {
               return const SizedBox.shrink();
             }
-            final parts = <String>[
-              if (id.mac.isNotEmpty) 'MAC ${id.mac}',
-              if (id.serial.isNotEmpty) 'SN ${id.serial}',
-            ];
+            final l = context.l;
             return Positioned(
-              top: 48,
               right: 24,
+              bottom: 20,
               // Wrapped in a transparent Material: the badge is mounted in the
-              // MaterialApp.builder Stack, OUTSIDE any Scaffold/Material, so a
-              // bare Text renders with Flutter's yellow "no default text style"
-              // debug underline. Material supplies a proper DefaultTextStyle.
+              // MaterialApp.builder Stack, OUTSIDE any Scaffold/Material, so
+              // text would otherwise render with Flutter's yellow "no default
+              // text style" debug underline.
               child: Material(
                 type: MaterialType.transparency,
                 child: IgnorePointer(
-                  child: Text(
-                    parts.join(' · '),
-                    style: GoogleFonts.sora(
-                      fontSize: 11,
-                      color: Colors.white38,
-                      fontWeight: FontWeight.w600,
-                      decoration: TextDecoration.none,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.60),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          width: 1),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (id.serial.isNotEmpty)
+                          _line(l.networkDeviceSerial, id.serial),
+                        if (id.mac.isNotEmpty) ...[
+                          if (id.serial.isNotEmpty) const SizedBox(height: 3),
+                          _line(l.networkDeviceMac, id.mac),
+                        ],
+                      ],
                     ),
                   ),
                 ),
@@ -52,4 +66,25 @@ class TvIdentityBadge extends StatelessWidget {
       },
     );
   }
+
+  Widget _line(String label, String value) => RichText(
+        text: TextSpan(
+          style: GoogleFonts.sora(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            decoration: TextDecoration.none,
+          ),
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: const TextStyle(
+                color: Colors.white60,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+            TextSpan(text: value),
+          ],
+        ),
+      );
 }
