@@ -1,4 +1,6 @@
-﻿import 'package:app_localization/app_localization.dart';
+﻿import 'dart:async';
+
+import 'package:app_localization/app_localization.dart';
 import 'package:commons/commons.dart';
 import 'package:fndtv/src/ui/app_view.dart';
 import 'package:flutter/widgets.dart';
@@ -134,7 +136,14 @@ class AppBlocProvider extends StatelessWidget {
             final stb = StbSystemService();
             final cubit = NetworkCubit(
               service: StbNetworkService(),
-              observer: ConnectivityObserver(),
+              observer: StbSystemService.isStb
+                  ? ConnectivityObserver()
+                  // Non-STB: inert observer — no real connectivity listening,
+                  // no /health probing. The network manager is STB-only.
+                  : ConnectivityObserver(
+                      changes: const Stream.empty(),
+                      probe: () async => true,
+                    ),
               // Degrade to status-only when the box has neither device-owner
               // nor root (spec: error handling).
               checkManageable: () async =>

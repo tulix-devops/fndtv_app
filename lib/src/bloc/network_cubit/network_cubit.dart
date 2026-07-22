@@ -26,7 +26,7 @@ class NetworkState extends Equatable {
 
   const NetworkState({
     this.online = true,
-    this.canManage = true,
+    this.canManage = false,
     this.wifiEnabled = false,
     this.ssid,
     this.ip,

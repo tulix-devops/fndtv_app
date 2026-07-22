@@ -49,6 +49,7 @@ class DeviceIdentityCubit extends Cubit<DeviceIdentityState> {
       }
     }
 
+    if (isClosed) return;
     emit(DeviceIdentityState(
       mac: await safe(_readMac, ''),
       serial: await safe(_readSerial, ''),
