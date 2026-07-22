@@ -647,16 +647,23 @@ class StbBridge(private val context: Context) {
      * Join a network. Primary: legacy WifiConfiguration add/enable — still
      * honoured for device-owner apps on API 29+ (and the only path on the
      * Android 10 X88 Pro 10 fleet). Fallback: `cmd wifi connect-network` (A11+).
-     * [security] is `open`/`wpa2`/`wpa3` (from the scan); WPA3 uses SAE key
-     * management, which the legacy WifiConfiguration path supports only on
-     * API 30+ — an SAE-only AP on an unrooted Android-10 box can't be joined and
-     * surfaces as the usual timeout. Returns true when the join was INITIATED;
-     * Dart polls wifiStatus for the outcome (a wrong password only shows as a
-     * timeout).
+     *
+     * Secured networks are joined with **WPA2-PSK, pinned** — we deliberately do
+     * NOT use WPA3-SAE. The target STB fleet's Broadcom/Rockchip Wi-Fi firmware
+     * cannot do the Protected Management Frames that SAE requires, so if the
+     * framework is allowed to negotiate (or picks SAE) on a WPA2/WPA3-transition
+     * AP, the driver reports `fw doesn't support MFP` and the AP rejects the
+     * association (`ASSOC-REJECT status_code=53`) BEFORE the password handshake
+     * even starts — which looks like a wrong password but isn't. Pinning WPA_PSK
+     * forces WPA2 on transition APs (the common home-router case), which the
+     * firmware handles fine. Genuinely WPA3-only APs are unjoinable on this
+     * firmware regardless. [security] is kept for logging only.
+     *
+     * Returns true when the join was INITIATED; Dart polls wifiStatus for the
+     * outcome (a wrong password only shows as a timeout).
      */
     private fun connectWifi(ssid: String, password: String?, security: String?): Boolean {
         if (ssid.isBlank()) return false
-        val wantsWpa3 = security == "wpa3"
         try {
             val w = wifi ?: throw IllegalStateException("no WifiManager")
             @Suppress("DEPRECATION")
@@ -664,17 +671,13 @@ class StbBridge(private val context: Context) {
             @Suppress("DEPRECATION")
             val conf = WifiConfiguration().apply {
                 SSID = "\"$ssid\""
-                when {
-                    password.isNullOrEmpty() ->
-                        allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE)
-                    wantsWpa3 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
-                        // WPA3-Personal (SAE). KeyMgmt.SAE is API 30+; the
-                        // framework enforces the required Protected Management
-                        // Frames for SAE automatically.
-                        allowedKeyManagement.set(WifiConfiguration.KeyMgmt.SAE)
-                        preSharedKey = "\"$password\""
-                    }
-                    else -> preSharedKey = "\"$password\"" // WPA2-PSK
+                if (password.isNullOrEmpty()) {
+                    allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE)
+                } else {
+                    // Pin WPA2-PSK so the framework never auto-upgrades to SAE on
+                    // a transition AP (see the method doc — old fw can't do MFP).
+                    allowedKeyManagement.set(WifiConfiguration.KeyMgmt.WPA_PSK)
+                    preSharedKey = "\"$password\""
                 }
             }
             @Suppress("DEPRECATION")
@@ -683,7 +686,7 @@ class StbBridge(private val context: Context) {
                 @Suppress("DEPRECATION") w.disconnect()
                 @Suppress("DEPRECATION") w.enableNetwork(netId, true)
                 @Suppress("DEPRECATION") w.reconnect()
-                Log.i(tag, "connectWifi: legacy path initiated for $ssid (netId=$netId, sec=$security)")
+                Log.i(tag, "connectWifi: legacy WPA2-PSK path initiated for $ssid (netId=$netId, sec=$security)")
                 return true
             }
             Log.w(tag, "connectWifi: addNetwork returned $netId for $ssid")
@@ -692,10 +695,11 @@ class StbBridge(private val context: Context) {
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && isRootAvailable()) {
             val esc = ssid.replace("'", "'\\''")
-            val cmd = when {
-                password.isNullOrEmpty() -> "cmd wifi connect-network '$esc' open"
-                else -> "cmd wifi connect-network '$esc' ${if (wantsWpa3) "wpa3" else "wpa2"} " +
-                    "'${password.replace("'", "'\\''")}'"
+            // Always wpa2 (not wpa3) for the same firmware/MFP reason as above.
+            val cmd = if (password.isNullOrEmpty()) {
+                "cmd wifi connect-network '$esc' open"
+            } else {
+                "cmd wifi connect-network '$esc' wpa2 '${password.replace("'", "'\\''")}'"
             }
             return runSu(cmd) == 0
         }
