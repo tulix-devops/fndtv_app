@@ -7,17 +7,38 @@ import 'package:fndtv/src/core/services/stb_network_service.dart';
 import 'package:fndtv/src/ui/widgets/tv/tv_widgets.dart' show kTvBg, kTvAccent;
 import 'package:google_fonts/google_fonts.dart';
 
-/// Full-screen Network page (TV/STB): connection + ethernet + identity cards
-/// on the left, scannable Wi-Fi list on the right. Wired ⇄ Wi-Fi switch with
-/// a no-cable warning. Suppresses the global offline overlay while open.
-class TvNetworkPage extends StatefulWidget {
+/// Full-screen Network page (TV/STB) — a Scaffold wrapper around
+/// [TvNetworkView], used when the box is OFFLINE (pushed by the offline
+/// overlay's CTA, with no nav rail behind it). When ONLINE, the same
+/// [TvNetworkView] is embedded inside the main nav shell so the nav rail stays
+/// alive and Left/Back return to it like any other tab.
+class TvNetworkPage extends StatelessWidget {
   const TvNetworkPage({super.key});
 
   @override
-  State<TvNetworkPage> createState() => _TvNetworkPageState();
+  Widget build(BuildContext context) => const Scaffold(
+        backgroundColor: kTvBg,
+        body: TvNetworkView(autofocusOnEnter: true),
+      );
 }
 
-class _TvNetworkPageState extends State<TvNetworkPage> {
+/// The Network-manager content: connection + ethernet + identity cards on the
+/// left, scannable Wi-Fi list on the right. Wired ⇄ Wi-Fi switch with a
+/// no-cable warning. Suppresses the global offline overlay while shown.
+///
+/// Embeddable: [autofocusOnEnter] is true when it's a standalone pushed page
+/// (grab D-pad focus on entry) and false when embedded as a nav tab (leave
+/// focus on the rail so the user moves Right into it, like other tabs).
+class TvNetworkView extends StatefulWidget {
+  const TvNetworkView({super.key, this.autofocusOnEnter = true});
+
+  final bool autofocusOnEnter;
+
+  @override
+  State<TvNetworkView> createState() => _TvNetworkViewState();
+}
+
+class _TvNetworkViewState extends State<TvNetworkView> {
   @override
   void initState() {
     super.initState();
@@ -63,13 +84,11 @@ class _TvNetworkPageState extends State<TvNetworkPage> {
   @override
   Widget build(BuildContext context) {
     final l = context.l;
-    return Scaffold(
-      backgroundColor: kTvBg,
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(48, 36, 48, 24),
-        child: BlocBuilder<NetworkCubit, NetworkState>(
-          builder: (context, net) {
-            return Column(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(48, 36, 48, 24),
+      child: BlocBuilder<NetworkCubit, NetworkState>(
+        builder: (context, net) {
+          return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
@@ -98,7 +117,6 @@ class _TvNetworkPageState extends State<TvNetworkPage> {
             );
           },
         ),
-      ),
     );
   }
 
@@ -118,7 +136,7 @@ class _TvNetworkPageState extends State<TvNetworkPage> {
                   _ModeButton(
                     label: l.networkModeWifi,
                     active: net.wifiEnabled,
-                    autofocus: true,
+                    autofocus: widget.autofocusOnEnter,
                     onTap: () => _onModeChanged(true),
                   ),
                   const SizedBox(width: 10),
@@ -172,11 +190,12 @@ class _TvNetworkPageState extends State<TvNetworkPage> {
       trailing: _ModeButton(
         label: net.scanning ? l.networkScanning : l.networkScan,
         active: false,
-        // Guarantee exactly one autofocus target: the Wi-Fi mode button takes
-        // it when the box can manage Wi-Fi; otherwise those buttons aren't
-        // rendered, so Scan must take it — else the page opens with no focused
-        // element and the first D-pad press has nowhere to go.
-        autofocus: !net.canManage,
+        // Guarantee exactly one autofocus target when this is a standalone
+        // pushed page: the Wi-Fi mode button takes it when the box can manage
+        // Wi-Fi; otherwise those buttons aren't rendered, so Scan must take it.
+        // When embedded as a nav tab (autofocusOnEnter false) nothing grabs
+        // focus — it stays on the nav rail until the user moves Right.
+        autofocus: widget.autofocusOnEnter && !net.canManage,
         onTap: net.scanning ? null : () => context.read<NetworkCubit>().scan(),
       ),
       children: [

@@ -10,6 +10,7 @@ import 'package:fndtv/src/ui/widgets/tv/tv_widgets.dart'
 import 'package:fndtv/src/ui/widgets/widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fndtv/src/bloc/content_cubit/content_cubit.dart';
+import 'package:fndtv/src/bloc/network_cubit/network_cubit.dart';
 import 'package:fndtv/src/core/constants/fndtv_channels.dart';
 import 'package:fndtv/src/ui/pages/home/new_home_page.dart';
 import 'package:fndtv/src/ui/pages/live/new_live_page.dart';
@@ -75,6 +76,11 @@ class _MainContainerPageState extends State<MainContainerPage> {
   final _tabs = _MainTab.values;
   int _currentIndex = 0;
   late PageController _pageController;
+
+  /// STB only: when true, the network manager is shown INLINE as a nav tab
+  /// (nav rail stays alive) instead of a pushed full-screen page. Set when the
+  /// network item is selected while online; cleared when a real tab is chosen.
+  bool _networkTabActive = false;
 
   /// Lets us restore D-pad focus to the TV nav rail after the language dialog
   /// closes (its item focus nodes get disposed while the dialog holds focus).
@@ -142,10 +148,25 @@ class _MainContainerPageState extends State<MainContainerPage> {
       return;
     }
     if (index == _kNetworkNavIndex) {
-      _openNetworkPage();
+      _selectNetwork();
       return;
     }
+    // A real content tab — leave the inline network view if it was showing.
+    if (_networkTabActive) setState(() => _networkTabActive = false);
     _onTabTapped(index);
+  }
+
+  /// Network nav item. ONLINE → embed the network manager as an inline tab so
+  /// the nav rail stays alive (Right moves into it, Left/Back return to the
+  /// rail, like every other tab). OFFLINE → nothing else is usable, and the
+  /// offline overlay already covers the rail, so push it full-screen instead.
+  void _selectNetwork() {
+    final online = context.read<NetworkCubit>().state.online;
+    if (online) {
+      setState(() => _networkTabActive = true);
+    } else {
+      _openNetworkPage();
+    }
   }
 
   /// TV software-update check — a full-screen pushed page; focus returns to the
@@ -293,7 +314,8 @@ class _MainContainerPageState extends State<MainContainerPage> {
             ? AppScaffold(
                 key: _scaffoldKey,
                 color: kTvBg,
-                currentNavIndex: _currentIndex,
+                currentNavIndex:
+                    _networkTabActive ? _kNetworkNavIndex : _currentIndex,
                 onNavChanged: _onNavSelected,
                 navigationItems: [
                   (label: _tabs[0].title(context), icon: Icons.home_rounded),
@@ -311,11 +333,14 @@ class _MainContainerPageState extends State<MainContainerPage> {
                     label: context.l.navUpdates,
                     icon: Icons.system_update_rounded
                   ),
-                  // STB: in-app network manager — opens a full-screen page.
+                  // STB: in-app network manager — inline tab when online,
+                  // full-screen when offline.
                   if (StbSystemService.isStb)
                     (label: context.l.navNetwork, icon: Icons.wifi_rounded),
                 ],
-                body: _buildBody(context, currentTab, selectedLanguage),
+                body: _networkTabActive
+                    ? const TvNetworkView(autofocusOnEnter: false)
+                    : _buildBody(context, currentTab, selectedLanguage),
                 hasNavbar: true,
               )
             : Scaffold(
