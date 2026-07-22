@@ -120,12 +120,15 @@ class _TvVodCardState extends State<_TvVodCard> {
       onTap: () => openChannel(context, widget.item, ContentType.dvr),
       borderRadius: BorderRadius.circular(12),
       child: Container(
+        // A Container's `decoration` border insets its child by the border
+        // width, so a 1px→3px change on focus would re-inset and RESIZE the
+        // poster every time focus moves (the visible "twitch"). Keep the base
+        // border a constant 1px, and draw the focus ring via
+        // `foregroundDecoration` — which paints OVER the child without insetting
+        // it — so focusing never changes layout.
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: focused ? kTvAccent : Colors.white12,
-            width: focused ? 3 : 1,
-          ),
+          border: Border.all(color: Colors.white12, width: 1),
           boxShadow: focused
               ? [
                   BoxShadow(
@@ -136,6 +139,12 @@ class _TvVodCardState extends State<_TvVodCard> {
                 ]
               : null,
         ),
+        foregroundDecoration: focused
+            ? BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: kTvAccent, width: 3),
+              )
+            : null,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(10),
           child: Stack(
