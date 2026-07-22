@@ -15,8 +15,13 @@
 
   "navHome": "Home",
   "navLive": "Live",
+  "navOnDemand": "On Demand",
   "navRadio": "Radio",
   "navAbout": "About",
+  "tabTitleOnDemand": "ON DEMAND",
+  "tabSubtitleOnDemand": "Watch FNDTV on demand",
+  "sectionOnDemand": "On Demand",
+  "noVideosAvailable": "No videos available",
 
   "tabTitleHome": "HOME",
   "tabTitleLive": "LIVE",

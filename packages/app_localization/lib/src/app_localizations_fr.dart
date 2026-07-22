@@ -48,10 +48,25 @@ class AppLocalizationsFr extends AppLocalizations {
   String get navLive => 'Direct';
 
   @override
+  String get navOnDemand => 'À la demande';
+
+  @override
   String get navRadio => 'Radio';
 
   @override
   String get navAbout => 'À propos';
+
+  @override
+  String get tabTitleOnDemand => 'À LA DEMANDE';
+
+  @override
+  String get tabSubtitleOnDemand => 'Regardez FNDTV à la demande';
+
+  @override
+  String get sectionOnDemand => 'À la demande';
+
+  @override
+  String get noVideosAvailable => 'Aucune vidéo disponible';
 
   @override
   String get tabTitleHome => 'ACCUEIL';

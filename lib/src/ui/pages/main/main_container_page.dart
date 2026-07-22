@@ -7,6 +7,7 @@ import 'package:fndtv/src/bloc/content_cubit/content_cubit.dart';
 import 'package:fndtv/src/core/constants/fndtv_channels.dart';
 import 'package:fndtv/src/ui/pages/home/new_home_page.dart';
 import 'package:fndtv/src/ui/pages/live/new_live_page.dart';
+import 'package:fndtv/src/ui/pages/on_demand/new_on_demand_page.dart';
 import 'package:fndtv/src/ui/pages/radio/new_radio_page.dart';
 import 'package:fndtv/src/ui/pages/about/new_about_page.dart';
 import 'package:fndtv/src/ui/pages/settings/settings_page.dart';
@@ -44,8 +45,8 @@ class _MainContainerPageState extends State<MainContainerPage> {
         statusBarBrightness: Brightness.dark,
       ),
     );
-    // Load live (type 8) + radio (type 10) channels from the API.
-    context.read<ContentCubit>().getContentForMultipleTypes([8, 10]);
+    // Load live (type 8) + radio (type 10) + on-demand/VOD (type 17).
+    context.read<ContentCubit>().getContentForMultipleTypes([8, 10, 17]);
   }
 
   @override
@@ -71,8 +72,20 @@ class _MainContainerPageState extends State<MainContainerPage> {
   @override
   Widget build(BuildContext context) {
     final l = context.l;
-    final tabTitles = [l.tabTitleHome, l.tabTitleLive, l.tabTitleRadio, l.tabTitleAbout];
-    final tabSubtitles = [l.tabSubtitleHome, l.tabSubtitleLive, l.tabSubtitleRadio, ''];
+    final tabTitles = [
+      l.tabTitleHome,
+      l.tabTitleLive,
+      l.tabTitleOnDemand,
+      l.tabTitleRadio,
+      l.tabTitleAbout,
+    ];
+    final tabSubtitles = [
+      l.tabSubtitleHome,
+      l.tabSubtitleLive,
+      l.tabSubtitleOnDemand,
+      l.tabSubtitleRadio,
+      '',
+    ];
     // Language drives both the UI locale and the channel-language filter; derive
     // it from the LocalizationCubit so a persisted locale stays in sync.
     final selectedLanguage = FndtvLanguage.fromLocaleCode(
@@ -81,6 +94,7 @@ class _MainContainerPageState extends State<MainContainerPage> {
     final pages = [
       NewHomePage(language: selectedLanguage),
       NewLivePage(language: selectedLanguage),
+      NewOnDemandPage(language: selectedLanguage),
       NewRadioPage(language: selectedLanguage),
       NewAboutPage(language: selectedLanguage),
     ];
@@ -139,8 +153,8 @@ class _MainContainerPageState extends State<MainContainerPage> {
                     onChanged: (lang) =>
                         context.read<LocalizationCubit>().setLocale(lang.localeCode),
                   ),
-                  // Settings button on About tab
-                  if (_currentIndex == 3) ...[
+                  // Settings button on About tab (now index 4 after On Demand)
+                  if (_currentIndex == 4) ...[
                     const SizedBox(width: 4),
                     IconButton(
                       icon: const Icon(Icons.settings, color: Colors.white, size: 26),

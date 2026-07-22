@@ -178,6 +178,12 @@ abstract class AppLocalizations {
   /// **'Live'**
   String get navLive;
 
+  /// No description provided for @navOnDemand.
+  ///
+  /// In en, this message translates to:
+  /// **'On Demand'**
+  String get navOnDemand;
+
   /// No description provided for @navRadio.
   ///
   /// In en, this message translates to:
@@ -189,6 +195,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'About'**
   String get navAbout;
+
+  /// No description provided for @tabTitleOnDemand.
+  ///
+  /// In en, this message translates to:
+  /// **'ON DEMAND'**
+  String get tabTitleOnDemand;
+
+  /// No description provided for @tabSubtitleOnDemand.
+  ///
+  /// In en, this message translates to:
+  /// **'Watch FNDTV on demand'**
+  String get tabSubtitleOnDemand;
+
+  /// No description provided for @sectionOnDemand.
+  ///
+  /// In en, this message translates to:
+  /// **'On Demand'**
+  String get sectionOnDemand;
+
+  /// No description provided for @noVideosAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No videos available'**
+  String get noVideosAvailable;
 
   /// No description provided for @tabTitleHome.
   ///

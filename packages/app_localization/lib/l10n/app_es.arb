@@ -15,8 +15,13 @@
 
   "navHome": "Inicio",
   "navLive": "En vivo",
+  "navOnDemand": "Bajo demanda",
   "navRadio": "Radio",
   "navAbout": "Acerca de",
+  "tabTitleOnDemand": "BAJO DEMANDA",
+  "tabSubtitleOnDemand": "Vea FNDTV bajo demanda",
+  "sectionOnDemand": "Bajo demanda",
+  "noVideosAvailable": "No hay videos disponibles",
 
   "tabTitleHome": "INICIO",
   "tabTitleLive": "EN VIVO",
