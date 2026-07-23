@@ -100,17 +100,19 @@ class _MainContainerPageState extends State<MainContainerPage> {
     ];
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
-        statusBarColor: Color(0xFFA83734), // red strip (non-edge-to-edge fallback)
+        statusBarColor:
+            Color(0xFFA83734), // red strip (non-edge-to-edge fallback)
         statusBarIconBrightness: Brightness.light, // white icons (Android)
         statusBarBrightness: Brightness.dark, // white icons (iOS)
       ),
       child: Scaffold(
-      body: Column(
-        children: [
-          // App bar
-          Container(
+        body: Column(
+          children: [
+            // App bar
+            Container(
               color: const Color(0xFFA83734),
-              padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 12, 16, 8),
+              padding: EdgeInsets.fromLTRB(
+                  16, MediaQuery.of(context).padding.top + 12, 16, 8),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -150,42 +152,43 @@ class _MainContainerPageState extends State<MainContainerPage> {
                   // channel-language filter.
                   _LanguageSelector(
                     selected: selectedLanguage,
-                    onChanged: (lang) =>
-                        context.read<LocalizationCubit>().setLocale(lang.localeCode),
+                    onChanged: (lang) => context
+                        .read<LocalizationCubit>()
+                        .setLocale(lang.localeCode),
                   ),
                   // Settings button on About tab (now index 4 after On Demand)
-                  if (_currentIndex == 4) ...[
-                    const SizedBox(width: 4),
-                    IconButton(
-                      icon: const Icon(Icons.settings, color: Colors.white, size: 26),
-                      padding: EdgeInsets.zero,
-                      onPressed: () => Navigator.of(context).pushNamed(SettingsPage.path),
-                    ),
-                  ],
+                  // if (_currentIndex == 4) ...[
+                  //   const SizedBox(width: 4),
+                  //   IconButton(
+                  //     icon: const Icon(Icons.settings, color: Colors.white, size: 26),
+                  //     padding: EdgeInsets.zero,
+                  //     onPressed: () => Navigator.of(context).pushNamed(SettingsPage.path),
+                  //   ),
+                  // ],
                 ],
               ),
             ),
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              onPageChanged: _onPageChanged,
-              physics: const BouncingScrollPhysics(),
-              children: pages,
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                onPageChanged: _onPageChanged,
+                physics: const BouncingScrollPhysics(),
+                children: pages,
+              ),
             ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Spotify-style persistent radio mini-player (hidden when idle)
-          const RadioMiniBar(),
-          FNDTVBottomNavigationBar(
-            currentIndex: _currentIndex,
-            onTap: _onTabTapped,
-          ),
-        ],
-      ),
+          ],
+        ),
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Spotify-style persistent radio mini-player (hidden when idle)
+            const RadioMiniBar(),
+            FNDTVBottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: _onTabTapped,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -229,7 +232,8 @@ class _LanguageSelector extends StatelessWidget {
           padding: const EdgeInsets.all(2.5),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withValues(alpha: 0.85), width: 1.5),
+            border: Border.all(
+                color: Colors.white.withValues(alpha: 0.85), width: 1.5),
           ),
           child: CountryFlag.fromCountryCode(
             selected.countryCode,
@@ -349,13 +353,15 @@ class _LanguageRow extends StatelessWidget {
                     lang.endonym,
                     style: GoogleFonts.sora(
                       fontSize: 15,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight:
+                          isSelected ? FontWeight.w700 : FontWeight.w500,
                       color: isSelected ? colors.accent : colors.textPrimary,
                     ),
                   ),
                 ),
                 if (isSelected)
-                  Icon(Icons.check_circle_rounded, color: colors.accent, size: 22),
+                  Icon(Icons.check_circle_rounded,
+                      color: colors.accent, size: 22),
               ],
             ),
           ),

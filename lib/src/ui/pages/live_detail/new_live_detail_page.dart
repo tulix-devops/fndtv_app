@@ -2,6 +2,7 @@ import 'package:chewie/chewie.dart';
 import 'package:commons/commons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fndtv/src/core/audio/radio_player_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:app_localization/app_localization.dart';
@@ -29,31 +30,13 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
   bool _loading = true;
   bool _error = false;
   bool _isGrid = false;
-  DateTime _selectedDate = DateTime.now();
+  final DateTime _selectedDate = DateTime.now();
   List<LiveModel> _programs = const [];
 
   @override
   void initState() {
     super.initState();
     _fetchSchedule();
-  }
-
-  Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: now.subtract(const Duration(days: 14)),
-      lastDate: now.add(const Duration(days: 14)),
-    );
-    if (picked != null && mounted) {
-      setState(() {
-        _selectedDate = picked;
-        _loading = true;
-        _error = false;
-      });
-      _fetchSchedule();
-    }
   }
 
   Future<void> _fetchSchedule() async {
@@ -101,12 +84,14 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
           // Branded app bar — back + page name (left), crest logo (right)
           Container(
             color: const Color(0xFFA83734),
-            padding: EdgeInsets.fromLTRB(4, MediaQuery.of(context).padding.top + 8, 16, 10),
+            padding: EdgeInsets.fromLTRB(
+                4, MediaQuery.of(context).padding.top + 8, 16, 10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 26),
+                  icon: const Icon(Icons.arrow_back_rounded,
+                      color: Colors.white, size: 26),
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
                 Expanded(
@@ -154,45 +139,44 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
                 const SizedBox(height: 12),
 
                 // Inline mini-player
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: _InlineLivePlayer(url: link),
-              ),
-            ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: _InlineLivePlayer(url: link),
+                  ),
+                ),
 
-            const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-            // Schedule controls: title + grid/list toggle + date chip
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Text(
-                    context.l.archive,
-                    style: GoogleFonts.sora(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: colors.accent,
-                    ),
+                // Schedule controls: title + grid/list toggle + date chip
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Text(
+                        context.l.archive,
+                        style: GoogleFonts.sora(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: colors.accent,
+                        ),
+                      ),
+                      const Spacer(),
+                      _ViewToggle(
+                        isGrid: _isGrid,
+                        onChanged: (v) => setState(() => _isGrid = v),
+                        colors: colors,
+                      ),
+                      const SizedBox(width: 10),
+                      _DateChip(
+                        date: _selectedDate,
+                        colors: colors,
+                      ),
+                    ],
                   ),
-                  const Spacer(),
-                  _ViewToggle(
-                    isGrid: _isGrid,
-                    onChanged: (v) => setState(() => _isGrid = v),
-                    colors: colors,
-                  ),
-                  const SizedBox(width: 10),
-                  _DateChip(
-                    date: _selectedDate,
-                    onTap: _pickDate,
-                    colors: colors,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
+                ),
+                const SizedBox(height: 12),
 
                 // DVR / EPG body (grid or list)
                 Expanded(child: _buildScheduleBody(colors)),
@@ -226,7 +210,8 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
                 });
                 _fetchSchedule();
               },
-              child: Text(context.l.retry, style: TextStyle(color: colors.accent)),
+              child:
+                  Text(context.l.retry, style: TextStyle(color: colors.accent)),
             ),
           ],
         ),
@@ -252,13 +237,13 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
           childAspectRatio: 0.82,
         ),
         itemCount: _programs.length,
-        itemBuilder: (context, i) =>
-            _DvrGridCard(program: _programs[i], isCurrent: isCurrent(_programs[i])),
+        itemBuilder: (context, i) => _DvrGridCard(
+            program: _programs[i], isCurrent: isCurrent(_programs[i])),
       );
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      padding: const EdgeInsets.fromLTRB(6, 0, 6, 14),
       itemCount: _programs.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, i) =>
@@ -288,7 +273,8 @@ class _ViewToggle extends StatelessWidget {
   final ValueChanged<bool> onChanged;
   final UiKitColors colors;
 
-  const _ViewToggle({required this.isGrid, required this.onChanged, required this.colors});
+  const _ViewToggle(
+      {required this.isGrid, required this.onChanged, required this.colors});
 
   @override
   Widget build(BuildContext context) {
@@ -319,7 +305,8 @@ class _ViewToggle extends StatelessWidget {
             right: left ? Radius.zero : const Radius.circular(9),
           ),
         ),
-        child: Icon(icon, size: 18, color: active ? Colors.white : colors.accent),
+        child:
+            Icon(icon, size: 18, color: active ? Colors.white : colors.accent),
       ),
     );
   }
@@ -331,36 +318,30 @@ class _ViewToggle extends StatelessWidget {
 
 class _DateChip extends StatelessWidget {
   final DateTime date;
-  final VoidCallback onTap;
   final UiKitColors colors;
 
-  const _DateChip({required this.date, required this.onTap, required this.colors});
+  const _DateChip({required this.date, required this.colors});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: colors.accent, width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              DateFormat('MMM d').format(date),
-              style: GoogleFonts.sora(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: colors.accent,
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.accent, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            DateFormat('MMM d').format(date),
+            style: GoogleFonts.sora(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: colors.accent,
             ),
-            const SizedBox(width: 6),
-            Icon(Icons.calendar_today_rounded, size: 14, color: colors.accent),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -391,6 +372,8 @@ class _InlineLivePlayerState extends State<_InlineLivePlayer> {
   }
 
   Future<void> _init() async {
+    RadioPlayerService.instance
+        .stop(); // stop any background radio playback when opening a live channel
     if (widget.url.isEmpty) {
       setState(() => _failed = true);
       return;
@@ -441,7 +424,8 @@ class _InlineLivePlayerState extends State<_InlineLivePlayer> {
         color: Colors.black,
         child: _failed
             ? const Center(
-                child: Icon(Icons.videocam_off_rounded, color: Colors.white54, size: 36),
+                child: Icon(Icons.videocam_off_rounded,
+                    color: Colors.white54, size: 36),
               )
             : (_chewie != null
                 ? Chewie(controller: _chewie!)
@@ -466,6 +450,22 @@ String _fmtTime(String? iso) {
   }
 }
 
+Color _scheduleCardBackground(UiKitColors colors, bool isCurrent) {
+  if (isCurrent) {
+    return Color.lerp(colors.accent, colors.bgCard, 0.22)!;
+  }
+  return colors.bgCardHover;
+}
+
+Color _scheduleCardBorder(UiKitColors colors, bool isCurrent) {
+  if (isCurrent) return colors.accentHover;
+  return colors.borderStrong.withValues(alpha: 0.7);
+}
+
+Color _scheduleCardTimeColor(UiKitColors colors, bool isCurrent) {
+  return isCurrent ? Colors.white : colors.accentHover;
+}
+
 class _DvrRow extends StatelessWidget {
   final LiveModel program;
   final bool isCurrent;
@@ -480,19 +480,21 @@ class _DvrRow extends StatelessWidget {
     final start = _fmtTime(program.startsAt);
     final end = _fmtTime(program.endsAt);
 
-    final titleColor = isCurrent ? Colors.white : colors.textMuted;
-    final timeColor = isCurrent ? Colors.white : colors.accent;
+    final cardBackground = _scheduleCardBackground(colors, isCurrent);
+    final cardBorder = _scheduleCardBorder(colors, isCurrent);
+    final titleColor = isCurrent ? Colors.white : colors.textPrimary;
+    final timeColor = _scheduleCardTimeColor(colors, isCurrent);
     final range = end.isEmpty ? start : '$start - $end';
 
     return Container(
       height: 62,
-      padding: const EdgeInsets.all(6),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: isCurrent ? colors.accent : const Color(0xFFF6E3E3),
+        color: cardBackground,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           width: 1,
-          color: isCurrent ? colors.accent : const Color(0xFFE2B6B6),
+          color: cardBorder,
         ),
       ),
       child: Row(
@@ -508,23 +510,25 @@ class _DvrRow extends StatelessWidget {
                       thumb,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
-                        color: colors.bgSurface,
-                        child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 22),
+                        color: colors.bgHero,
+                        child: Icon(Icons.live_tv_rounded,
+                            color: colors.textHint, size: 22),
                       ),
                     )
                   : Container(
-                      color: colors.bgSurface,
-                      child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 22),
+                      color: colors.bgHero,
+                      child: Icon(Icons.live_tv_rounded,
+                          color: colors.textHint, size: 22),
                     ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 7),
           // Title (secondary — trimmed to a single line)
           Expanded(
             child: Text(
               program.title,
               style: GoogleFonts.sora(
-                fontSize: 11.5,
+                fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: titleColor,
               ),
@@ -532,13 +536,13 @@ class _DvrRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 5),
           // Time range (primary — full range, prominent)
           if (range.isNotEmpty)
             Text(
               range,
               style: GoogleFonts.sora(
-                fontSize: 16,
+                fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 color: timeColor,
               ),
@@ -568,17 +572,19 @@ class _DvrGridCard extends StatelessWidget {
     final end = _fmtTime(program.endsAt);
     final range = end.isEmpty ? start : '$start - $end';
 
+    final cardBackground = _scheduleCardBackground(colors, isCurrent);
+    final cardBorder = _scheduleCardBorder(colors, isCurrent);
     final titleColor = isCurrent ? Colors.white : colors.textPrimary;
-    final timeColor = isCurrent ? Colors.white : colors.accent;
+    final timeColor = _scheduleCardTimeColor(colors, isCurrent);
 
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: isCurrent ? colors.accent : const Color(0xFFF6E3E3),
+        color: cardBackground,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           width: 1,
-          color: isCurrent ? colors.accent : const Color(0xFFE2B6B6),
+          color: cardBorder,
         ),
       ),
       child: Column(
@@ -593,13 +599,15 @@ class _DvrGridCard extends StatelessWidget {
                       thumb,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
-                        color: colors.bgSurface,
-                        child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 26),
+                        color: colors.bgHero,
+                        child: Icon(Icons.live_tv_rounded,
+                            color: colors.textHint, size: 26),
                       ),
                     )
                   : Container(
-                      color: colors.bgSurface,
-                      child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 26),
+                      color: colors.bgHero,
+                      child: Icon(Icons.live_tv_rounded,
+                          color: colors.textHint, size: 26),
                     ),
             ),
           ),

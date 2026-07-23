@@ -1,11 +1,13 @@
 ﻿import 'package:commons/commons.dart';
 import 'package:flutter/material.dart';
+import 'package:fndtv/src/core/audio/radio_player_service.dart';
 import 'package:fndtv/src/data/models/content/live_model.dart';
 import 'package:fndtv/src/ui/widgets/widgets.dart';
 import 'package:flutter/services.dart';
 
 class VideoPlayerPage extends StatefulWidget {
-  const VideoPlayerPage({super.key, required this.video, required this.contentType});
+  const VideoPlayerPage(
+      {super.key, required this.video, required this.contentType});
 
   final LiveModel video;
   final ContentType contentType;
@@ -22,16 +24,18 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   void initState() {
     super.initState();
     print('hello');
+    RadioPlayerService.instance
+        .stop(); // stop any background radio playback when opening a live channel
 
     print(widget.video);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!context.isTv) {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]);
-      }
-    });
+    // WidgetsBinding.instance.addPostFrameCallback((_) {
+    //   if (!context.isTv) {
+    //     SystemChrome.setPreferredOrientations([
+    //       DeviceOrientation.landscapeLeft,
+    //       DeviceOrientation.landscapeRight,
+    //     ]);
+    //   }
+    // });
   }
 
   @override
@@ -48,7 +52,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   @override
   Widget build(BuildContext context) {
     String link = widget.video.sources.getPreferredVideoSource() ?? '';
-    print('this is the link ${link}');
+    print('this is the link $link');
 
     return Scaffold(
         body: widget.contentType == ContentType.radio
