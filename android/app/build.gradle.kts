@@ -29,7 +29,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.fndtv.videoplayer"
+        applicationId = "com.qbc.android.fndtvchannel.mobile"
         minSdk = flutter.minSdkVersion  // Android 5.0 (Lollipop) - good compatibility
         targetSdk = 35  // Latest Android API level
         versionCode = flutter.versionCode
