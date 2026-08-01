@@ -28,10 +28,12 @@ class NewHomePage extends StatelessWidget {
             return ContentError(colors: colors);
           }
 
-          final live = channelsForLanguage(state.contentList?['8']?.data, language);
+          final live =
+              channelsForLanguage(state.contentList?['8']?.data, language);
           final mainLive = live.where((m) => !m.isTimeShift).toList();
           final timeShift = live.where((m) => m.isTimeShift).toList();
-          final radio = channelsForLanguage(state.contentList?['10']?.data, language);
+          final radio =
+              channelsForLanguage(state.contentList?['10']?.data, language);
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
@@ -42,8 +44,8 @@ class NewHomePage extends StatelessWidget {
                 const SizedBox(height: 22),
               ],
               if (timeShift.isNotEmpty) ...[
-                FndtvSectionHeader(l.sectionChicagoTime),
-                LivePosterTile(channel: timeShift.first, badge: l.badgeUsTime),
+                FndtvSectionHeader(l.sectionLiveNow),
+                LivePosterTile(channel: timeShift.first),
                 const SizedBox(height: 22),
               ],
               if (radio.isNotEmpty) ...[

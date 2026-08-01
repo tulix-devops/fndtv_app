@@ -1,8 +1,7 @@
-import 'package:chewie/chewie.dart';
 import 'package:commons/commons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fndtv/src/core/audio/radio_player_service.dart';
+import 'package:fndtv/src/ui/widgets/chewie_player/chewie_player.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:app_localization/app_localization.dart';
@@ -10,7 +9,6 @@ import 'package:fndtv/src/data/models/content/images_model.dart';
 import 'package:fndtv/src/data/models/content/live_model.dart';
 import 'package:fndtv/src/data/repositories/content/content_repository.dart';
 import 'package:ui_kit/ui_kit.dart';
-import 'package:video_player/video_player.dart';
 
 /// Live channel detail — inline mini-player at the top, with the channel's DVR /
 /// EPG schedule (`seasons`) listed below, one full-width item per row.
@@ -143,7 +141,7 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                    child: _InlineLivePlayer(url: link),
+                    child: ChewiePlayer(url: link),
                   ),
                 ),
 
@@ -351,96 +349,6 @@ class _DateChip extends StatelessWidget {
 // INLINE MINI PLAYER (self-contained video_player + chewie)
 // ═══════════════════════════════════════════════════════════════════════════
 
-class _InlineLivePlayer extends StatefulWidget {
-  final String url;
-
-  const _InlineLivePlayer({required this.url});
-
-  @override
-  State<_InlineLivePlayer> createState() => _InlineLivePlayerState();
-}
-
-class _InlineLivePlayerState extends State<_InlineLivePlayer> {
-  VideoPlayerController? _controller;
-  ChewieController? _chewie;
-  bool _failed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _init();
-  }
-
-  Future<void> _init() async {
-    RadioPlayerService.instance
-        .stop(); // stop any background radio playback when opening a live channel
-    if (widget.url.isEmpty) {
-      setState(() => _failed = true);
-      return;
-    }
-    try {
-      final controller = VideoPlayerController.networkUrl(
-        Uri.parse(widget.url),
-        formatHint: VideoFormat.hls,
-      );
-      await controller.initialize();
-      if (!mounted) {
-        controller.dispose();
-        return;
-      }
-      setState(() {
-        _controller = controller;
-        _chewie = ChewieController(
-          videoPlayerController: controller,
-          autoPlay: true,
-          looping: false,
-          allowFullScreen: true,
-          aspectRatio: 16 / 9,
-          materialProgressColors: ChewieProgressColors(
-            playedColor: const Color(0xFFA83734),
-            handleColor: const Color(0xFFA83734),
-            backgroundColor: Colors.grey,
-            bufferedColor: Colors.white24,
-          ),
-        );
-      });
-    } catch (_) {
-      if (mounted) setState(() => _failed = true);
-    }
-  }
-
-  @override
-  void dispose() {
-    _chewie?.dispose();
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 16 / 9,
-      child: Container(
-        color: Colors.black,
-        child: _failed
-            ? const Center(
-                child: Icon(Icons.videocam_off_rounded,
-                    color: Colors.white54, size: 36),
-              )
-            : (_chewie != null
-                ? Chewie(controller: _chewie!)
-                : const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
-                  )),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// DVR / SCHEDULE ROW  (full-width, one per row)
-// ═══════════════════════════════════════════════════════════════════════════
-
 String _fmtTime(String? iso) {
   if (iso == null || iso.isEmpty) return '';
   try {
@@ -532,8 +440,6 @@ class _DvrRow extends StatelessWidget {
                 fontWeight: FontWeight.w500,
                 color: titleColor,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
           ),
           const SizedBox(width: 5),

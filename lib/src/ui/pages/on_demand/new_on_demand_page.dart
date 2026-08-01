@@ -6,11 +6,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:fndtv/src/bloc/content_cubit/content_cubit.dart';
 import 'package:fndtv/src/core/constants/fndtv_channels.dart';
 import 'package:fndtv/src/data/models/content/live_model.dart';
+import 'package:fndtv/src/ui/widgets/chewie_player/chewie_player.dart';
 import 'package:fndtv/src/ui/widgets/channel/channel_tiles.dart';
 import 'package:ui_kit/ui_kit.dart';
 
 /// On Demand — the selected language's VOD library (backend content type 17):
-/// a poster grid; tapping a poster opens the video player.
+/// a poster grid; tapping a poster opens the Chewie player.
 class NewOnDemandPage extends StatelessWidget {
   final FndtvLanguage language;
 
@@ -60,9 +61,17 @@ class _VodPosterCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.uiKitColors;
+    final videoUrl = item.sources.getPreferredVideoSource() ?? '';
 
     return GestureDetector(
-      onTap: () => openChannel(context, item, ContentType.dvr),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ChewiePlayerPage(
+            title: item.title,
+            url: videoUrl,
+          ),
+        ),
+      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: Stack(
@@ -73,8 +82,8 @@ class _VodPosterCard extends StatelessWidget {
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => Container(
                 color: colors.bgSurface,
-                child: Icon(Icons.movie_rounded,
-                    size: 40, color: colors.textHint),
+                child:
+                    Icon(Icons.movie_rounded, size: 40, color: colors.textHint),
               ),
             ),
             Positioned(

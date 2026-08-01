@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fndtv/src/bloc/content_cubit/content_cubit.dart';
 import 'package:app_localization/app_localization.dart';
 import 'package:fndtv/src/core/constants/fndtv_channels.dart';
+import 'package:fndtv/src/data/models/content/live_model.dart';
 import 'package:fndtv/src/ui/widgets/channel/channel_tiles.dart';
 import 'package:ui_kit/ui_kit.dart';
 
@@ -28,9 +29,12 @@ class NewLivePage extends StatelessWidget {
             return ContentError(colors: colors);
           }
 
-          final live = channelsForLanguage(state.contentList?['8']?.data, language);
-          final mainLive = live.where((m) => !m.isTimeShift).toList();
-          final timeShift = live.where((m) => m.isTimeShift).toList();
+          final live =
+              channelsForLanguage(state.contentList?['8']?.data, language);
+          final List<LiveModel> mainLive =
+              live.where((m) => !m.isTimeShift).toList();
+          final List<LiveModel> timeShift =
+              live.where((m) => m.isTimeShift).toList();
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
@@ -41,8 +45,10 @@ class NewLivePage extends StatelessWidget {
                 const SizedBox(height: 22),
               ],
               if (timeShift.isNotEmpty) ...[
-                FndtvSectionHeader(l.sectionChicagoTime),
-                LivePosterTile(channel: timeShift.first, badge: l.badgeUsTime),
+                FndtvSectionHeader(l.sectionLiveTv),
+                LivePosterTile(
+                  channel: timeShift.first,
+                ),
               ],
             ],
           );

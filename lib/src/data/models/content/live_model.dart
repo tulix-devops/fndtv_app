@@ -24,9 +24,12 @@ class ContentModelList extends Equatable {
       statusCode: json['statusCode'] as int? ?? 200,
       message: json['message'] as String? ?? '',
       data: List<LiveModel>.from(
-        (json['data'] as List<dynamic>? ?? []).map((x) => LiveModel.fromJson(x)),
+        (json['data'] as List<dynamic>? ?? [])
+            .map((x) => LiveModel.fromJson(x)),
       ),
-      links: json['links'] != null ? PaginationLinks.fromJson(json['links']) : null,
+      links: json['links'] != null
+          ? PaginationLinks.fromJson(json['links'])
+          : null,
       meta: json['meta'] != null ? PaginationMeta.fromJson(json['meta']) : null,
     );
   }
@@ -148,23 +151,37 @@ class LiveModel extends Equatable {
   factory LiveModel.fromJson(Map<String, dynamic> json) {
     return LiveModel(
       id: int.tryParse(json['id'].toString()) ?? 0,
-      statusId: json['statusId'] != null ? int.tryParse(json['statusId'].toString()) : null,
-      productId: json['productId'] != null ? int.tryParse(json['productId'].toString()) : null,
-      parentId: json['parentId'] != null ? int.tryParse(json['parentId'].toString()) : null,
+      statusId: json['statusId'] != null
+          ? int.tryParse(json['statusId'].toString())
+          : null,
+      productId: json['productId'] != null
+          ? int.tryParse(json['productId'].toString())
+          : null,
+      parentId: json['parentId'] != null
+          ? int.tryParse(json['parentId'].toString())
+          : null,
       typeId: int.tryParse(json['typeId'].toString()) ?? 0,
       type: json['type'] as String? ?? '',
-      countryId: json['countryId'] != null ? int.tryParse(json['countryId'].toString()) : null,
-      season: json['season'] != null ? int.tryParse(json['season'].toString()) : null,
-      episode: json['episode'] != null ? int.tryParse(json['episode'].toString()) : null,
+      countryId: json['countryId'] != null
+          ? int.tryParse(json['countryId'].toString())
+          : null,
+      season: json['season'] != null
+          ? int.tryParse(json['season'].toString())
+          : null,
+      episode: json['episode'] != null
+          ? int.tryParse(json['episode'].toString())
+          : null,
       title: json['title'] as String? ?? '',
       description: json['description'] as String?,
-      details: json['details'] != null ? DetailsModel.fromJson(json['details']) : null,
+      details: json['details'] != null
+          ? DetailsModel.fromJson(json['details'])
+          : null,
       seo: json['seo'] != null ? SeoModel.fromJson(json['seo']) : null,
-      images: json['images'] != null 
-          ? ImagesModel.fromJson(json['images']) 
+      images: json['images'] != null
+          ? ImagesModel.fromJson(json['images'])
           : ImagesModel.empty,
-      sources: json['sources'] != null 
-          ? SourceModel.fromJson(json['sources']) 
+      sources: json['sources'] != null
+          ? SourceModel.fromJson(json['sources'])
           : SourceModel.empty,
       audiences: json['audiences'] as List<dynamic>? ?? [],
       product: json['product'],
@@ -215,6 +232,64 @@ class LiveModel extends Equatable {
   @override
   String toString() {
     return 'LiveModel(id: $id, title: $title, type: $type, live: $live)';
+  }
+
+  LiveModel copyWith({
+    int? id,
+    int? statusId,
+    int? productId,
+    int? parentId,
+    int? typeId,
+    String? type,
+    int? countryId,
+    int? season,
+    int? episode,
+    String? title,
+    String? description,
+    DetailsModel? details,
+    SeoModel? seo,
+    ImagesModel? images,
+    SourceModel? sources,
+    List<dynamic>? audiences,
+    dynamic product,
+    dynamic seasons,
+    dynamic attributes,
+    String? startsAt,
+    String? endsAt,
+    bool? isPermanent,
+    String? createdAt,
+    String? updatedAt,
+    bool? live,
+    String? dvrUrl,
+  }) {
+    return LiveModel(
+      id: id ?? this.id,
+      statusId: statusId ?? this.statusId,
+      productId: productId ?? this.productId,
+      parentId: parentId ?? this.parentId,
+      typeId: typeId ?? this.typeId,
+      type: type ?? this.type,
+      countryId: countryId ?? this.countryId,
+      season: season ?? this.season,
+      episode: episode ?? this.episode,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      details: details ?? this.details,
+      seo: seo ?? this.seo,
+      images: images ?? this.images,
+      sources: sources ?? this.sources,
+      audiences: audiences ?? this.audiences,
+      product: product ?? this.product,
+      seasons: seasons ?? this.seasons,
+      attributes: attributes ?? this.attributes,
+      startsAt: startsAt ?? this.startsAt,
+      endsAt: endsAt ?? this.endsAt,
+      isPermanent: isPermanent ?? this.isPermanent,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      live: live ?? this.live,
+      dvrUrl: dvrUrl ?? this.dvrUrl,
+    );
   }
 
   @override
