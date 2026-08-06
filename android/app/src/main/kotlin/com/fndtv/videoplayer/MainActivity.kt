@@ -29,6 +29,14 @@ class MainActivity : AudioServiceActivity() {
                 }
             }
         registerStbBridgeIfPresent(flutterEngine)
+
+        // Native SurfaceView video player. Registered for every flavor (the code
+        // is flavor-agnostic); which builds actually instantiate it is decided in
+        // Dart — see StbSurfacePlayer / VideoPlayerPage.
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            StbSurfacePlayerFactory.VIEW_TYPE,
+            StbSurfacePlayerFactory(flutterEngine.dartExecutor.binaryMessenger),
+        )
     }
 
     // The STB-only native bridge (device/network info, timezone, kiosk, power)

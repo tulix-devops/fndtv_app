@@ -43,6 +43,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // The boot animation (assets/video/bootanimation.ts) is opened by
+    // MediaPlayer through an AssetFileDescriptor on the legacy boxes, and a
+    // COMPRESSED asset has no seekable descriptor — openFd() throws
+    // "it is probably compressed". Keep .ts stored, not deflated.
+    androidResources {
+        noCompress += "ts"
+    }
+
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
@@ -129,6 +137,15 @@ android {
             }
         }
     }
+}
+
+dependencies {
+    // Media3/ExoPlayer for the native SurfaceView player (StbSurfacePlayer.kt),
+    // used on the legacy STB decode path. Pinned to the version
+    // video_player_android already resolves so there is exactly one Media3 on the
+    // classpath — a second, different one shows up as duplicate-class errors.
+    implementation("androidx.media3:media3-exoplayer:1.5.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
 }
 
 flutter {
