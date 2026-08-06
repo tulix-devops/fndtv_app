@@ -22,9 +22,25 @@ const List<String> kStbDisabledComponents = <String>[
 ];
 
 /// Package targets to DISABLE (not uninstall) on STB boot.
+///
+/// Google Play Services is disabled for **performance**, not tidiness: a box
+/// logcat (X88 Pro 14, 2026-07-28) caught `ANR in com.google.android.gms.unstable
+/// — failed to complete startup`, with GMS stuck in a restart loop burning ~39%
+/// CPU (`gms` 30% + `gms.persistent` 8.7%) on a box already pegged at 99% total.
+/// That starvation — not the video player — was what made playback stutter.
+/// The kiosk needs nothing from GMS: MDM runs on check-in polling (not FCM) and
+/// the Play Store is already uninstalled.
+///
+/// Reversible if ever needed (e.g. Widevine DRM or a future FCM push channel):
+/// remove the entry, or on the box `pm enable com.google.android.gms`.
 const List<String> kStbDisabledPackages = <String>[
   'com.rockchips.mediacenter', // Rockchip Media Center
   'com.google.android.tvlauncher', // Google TV Home (competing launcher)
+  // GMS/GSF disable is PARKED (2026-07-28): shipped together with the zero-copy
+  // video change and the box came up on a blank screen, so we couldn't tell
+  // which caused it. Re-introduce ON ITS OWN once the video change is cleared.
+  // 'com.google.android.gms',
+  // 'com.google.android.gsf',
 ];
 
 /// Dart side of the STB-only native bridge (`com.fndtv.videoplayer/stb`).
