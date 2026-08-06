@@ -18,7 +18,7 @@ import 'package:fndtv/src/data/models/content/source_model.dart';
 /// Spoken language of a channel.
 enum FndtvLanguage {
   french('French', 'fr', 'FR'),
-  english('English', 'en', 'GB'),
+  english('English', 'en', 'US'),
   spanish('Spanish', 'sp', 'ES');
 
   const FndtvLanguage(this.label, this.code, this.countryCode);
@@ -29,8 +29,9 @@ enum FndtvLanguage {
   /// Short code used in logo file names / EPG lookups, e.g. `fr`.
   final String code;
 
-  /// ISO country code used to render the flag (French→FR, English→GB,
-  /// Spanish→ES).
+  /// ISO country code used to render the flag (French→FR, English→US,
+  /// Spanish→ES). English shows the US flag, not GB — the English audience is
+  /// the USA feed. Display only; never sent to the backend.
   final String countryCode;
 
   /// App UI locale code (French→`fr`, English→`en`, Spanish→`es`).

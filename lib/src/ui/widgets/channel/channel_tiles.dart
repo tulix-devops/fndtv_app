@@ -60,6 +60,87 @@ class ContentError extends StatelessWidget {
   }
 }
 
+/// Shown when the app has nothing to display because the backend returned no
+/// usable content — e.g. a content type failed server-side while the others
+/// succeeded, so the request "succeeds" but the channel list is empty.
+///
+/// Without this the screen renders completely blank, which reads as a frozen
+/// or broken app. Telling the user it's a temporary, server-side problem (with
+/// a retry) is both truthful and actionable.
+class ContentUnavailable extends StatelessWidget {
+  final UiKitColors colors;
+  final VoidCallback? onRetry;
+
+  /// Text colours default to the UiKit palette (correct on the light mobile
+  /// surfaces). The TV/STB screens paint on a near-black background where
+  /// `textPrimary` is unreadable, so they pass light overrides.
+  final Color? titleColor;
+  final Color? bodyColor;
+  final Color? iconColor;
+
+  const ContentUnavailable({
+    super.key,
+    required this.colors,
+    this.onRetry,
+    this.titleColor,
+    this.bodyColor,
+    this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off_rounded,
+                size: 52, color: iconColor ?? colors.textMuted),
+            const SizedBox(height: 16),
+            Text(
+              l.contentUnavailableTitle,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.sora(
+                color: titleColor ?? colors.textPrimary,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: Text(
+                l.contentUnavailableBody,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.sora(
+                    color: bodyColor ?? colors.textMuted, fontSize: 14),
+              ),
+            ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                autofocus: true,
+                onPressed: onRetry,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colors.accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 14),
+                ),
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text(l.retry),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Opens a channel directly in the full-screen player.
 void openChannel(BuildContext context, LiveModel video, ContentType type) {
   print('Opening channel: $video');

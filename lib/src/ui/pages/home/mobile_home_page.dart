@@ -46,8 +46,8 @@ class MobileHomePage extends StatelessWidget {
                 const SizedBox(height: 22),
               ],
               if (timeShift.isNotEmpty) ...[
-                FndtvSectionHeader(l.sectionChicagoTime),
-                LivePosterTile(channel: timeShift.first, badge: l.badgeUsTime),
+                FndtvSectionHeader(l.sectionLiveNow),
+                LivePosterTile(channel: timeShift.first, badge: l.badgeLive),
                 const SizedBox(height: 22),
               ],
               if (radio.isNotEmpty) ...[
