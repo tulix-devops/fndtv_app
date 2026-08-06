@@ -2,11 +2,13 @@
 
 import 'dart:async';
 
+import 'package:app_logger/app_logger.dart';
 import 'package:commons/commons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fndtv/src/index.dart';
+import 'package:fndtv/src/bloc/network_cubit/network_cubit.dart';
 import 'package:fndtv/src/core/services/kiosk_lock_controller.dart';
 import 'package:fndtv/src/core/services/update_installer.dart';
 import 'package:local_storage/local_storage.dart';
@@ -14,6 +16,9 @@ import 'package:app_localization/app_localization.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:fndtv/src/ui/pages/main/main_container_page.dart';
+import 'package:fndtv/src/ui/widgets/stb_screen_size/stb_screen_size.dart';
+import 'package:fndtv/src/ui/widgets/stb_surface_player/stb_surface_boot_video.dart';
+import 'package:fndtv/src/ui/widgets/stb_video_player/stb_decode_profile.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -25,11 +30,21 @@ class SplashPage extends StatefulWidget {
   State<SplashPage> createState() => _SplashPageState();
 }
 
+/// Splash backdrop. Also used as the shield colour over the boot video, so it
+/// must stay opaque.
+const Color _splashBackground = Color(0xFF0E0F13);
+
 class _SplashPageState extends State<SplashPage> {
-  /// STB plays the branded boot animation (bootanimation.ts) via mpv; other
-  /// flavors keep the logo splash for a short minimum.
+  /// STB plays the branded boot animation (bootanimation.ts); other flavors keep
+  /// the logo splash for a short minimum.
   static const String _bootAsset = 'asset:///assets/video/bootanimation.ts';
   static const Duration _bootMaxDuration = Duration(seconds: 15);
+
+  /// How far into the clip the mpv path waits before revealing it — the audio
+  /// clock leads the video surface, so position alone reveals too early.
+  /// The legacy path does not need this: its "first frame" is a genuinely
+  /// drawn frame (`MEDIA_INFO_VIDEO_RENDERING_START`).
+  static const Duration _bootRevealAfter = Duration(milliseconds: 600);
   static const Duration _minSplash = Duration(milliseconds: 2500);
 
   Player? _bootPlayer;
@@ -42,8 +57,36 @@ class _SplashPageState extends State<SplashPage> {
   bool _initialized = false;
   bool _navigated = false;
 
+  /// True once the boot video has actually produced picture.
+  bool _bootFirstFrame = false;
+
+  /// Legacy box (API <= 30) — plays the boot clip through the NATIVE
+  /// SurfaceView player instead of mpv. Null while the API level is being read.
+  ///
+  /// **Why the split.** Through mpv the clip showed a full-screen green picture
+  /// with audio on the Android 11 boxes — intermittently, and specifically after
+  /// a cold reboot. mpv's only usable "started" signal is `position`, and
+  /// position runs off the AUDIO clock: audio begins, position advances, this
+  /// shield lifts, and the video surface is still in decoder init with unwritten
+  /// planes (Y=U=V=0 renders as solid green). A warm start hides it because
+  /// audio and video come up together. The native path reports a frame that was
+  /// genuinely DRAWN, and it is what the working native reference app uses for
+  /// this identical asset. Android 14 keeps mpv — it has never shown this.
+  bool? _bootUsesSurface;
+
+  /// Show the boot video only once real frames exist, never merely once a
+  /// controller has been built — the decoder-init window must not be on screen.
+  ///
+  /// Once it finishes (or errors, or times out) the surface goes black, and if
+  /// app init hasn't finished we'd sit on that dead frame with no feedback —
+  /// which reads as "the app hung". Falling back to the branded splash keeps the
+  /// logo + spinner up until we navigate.
   bool get _showBootVideo =>
-      StbSystemService.isStb && _bootController != null && !_bootError;
+      StbSystemService.isStb &&
+      _bootFirstFrame &&
+      !_bootError &&
+      !_bootDone &&
+      (_bootUsesSurface == true || _bootController != null);
 
   @override
   void initState() {
@@ -68,7 +111,7 @@ class _SplashPageState extends State<SplashPage> {
     );
 
     if (StbSystemService.isStb) {
-      _startBootAnimation();
+      unawaited(_startBootAnimation());
     } else {
       // No animation off the box — just hold the logo splash briefly.
       _bootTimer = Timer(_minSplash, _finishBoot);
@@ -77,14 +120,52 @@ class _SplashPageState extends State<SplashPage> {
     _init();
   }
 
-  void _startBootAnimation() {
+  Future<void> _startBootAnimation() async {
+    // Safety cap first — never let a stuck video (or a slow probe below) hold
+    // the box on the splash.
+    _bootTimer = Timer(_bootMaxDuration, _finishBoot);
     try {
-      MediaKit.ensureInitialized();
-      final player = Player();
-      final controller = VideoController(player);
-      _bootPlayer = player;
-      _bootController = controller;
+      // Legacy boxes render the clip natively — see [_bootUsesSurface]. Nothing
+      // more to set up here; StbSurfaceBootVideo owns it from `build`.
+      final sdk = await readAndroidSdkInt();
+      if (!mounted || _bootDone) return;
+      if (sdk <= kStbSurfacePlayerMaxSdk) {
+        logger.i('[STB] boot animation via native SurfaceView (API $sdk)');
+        setState(() => _bootUsesSurface = true);
+        return;
+      }
+      setState(() => _bootUsesSurface = false);
 
+      MediaKit.ensureInitialized();
+
+      // The boot clip needs the SAME decode path as the channel player — the
+      // legacy OMX hardware needs `mediacodec-copy` + `vo=gpu` and the low-power
+      // render props for every video we decode, not just the player page's.
+      final profile = await pickStbDecodeProfile();
+      if (!mounted || _bootDone) return;
+
+      final player = Player();
+      final controller = VideoController(
+        player,
+        configuration: VideoControllerConfiguration(
+          hwdec: profile.hwdec,
+          vo: profile.vo,
+        ),
+      );
+      _bootPlayer = player;
+
+      // Position is the only "playback started" signal media_kit exposes
+      // (`playing` flips before the track even opens) — but it runs off the
+      // AUDIO clock, so it moves while the video surface is still settling.
+      // Revealing on the very first tick is what let a line flicker along the
+      // bottom edge of the boot video on the Android 14 boxes: those 8 rows are
+      // the coded padding (1088 coded vs 1080 displayed) showing before the
+      // crop applies. Waiting out a short threshold covers it.
+      _bootSubs.add(player.stream.position.listen((p) {
+        if (p >= _bootRevealAfter && !_bootFirstFrame && mounted) {
+          setState(() => _bootFirstFrame = true);
+        }
+      }));
       _bootSubs.add(player.stream.completed.listen((done) {
         if (done) _finishBoot();
       }));
@@ -93,11 +174,15 @@ class _SplashPageState extends State<SplashPage> {
         _finishBoot();
       }));
 
-      // Safety cap — never let a stuck video hold the box on the splash.
-      _bootTimer = Timer(_bootMaxDuration, _finishBoot);
+      // Local asset, so the network props are inert; the read-back logging
+      // belongs to the channel player, not to a 15-second splash.
+      await applyStbMpvTuning(player, profile, network: false, verify: false);
+      if (!mounted || _bootDone) return;
 
-      player.open(Media(_bootAsset)); // autoplays, no loop
-    } catch (_) {
+      setState(() => _bootController = controller);
+      unawaited(player.open(Media(_bootAsset))); // autoplays, no loop
+    } catch (e) {
+      logger.w('[STB] boot animation failed to start: $e');
       _bootError = true;
       _finishBoot();
     }
@@ -106,12 +191,41 @@ class _SplashPageState extends State<SplashPage> {
   void _finishBoot() {
     if (_bootDone) return;
     _bootDone = true;
-    if (mounted) setState(() {});
+    _bootTimer?.cancel();
+    if (mounted) {
+      setState(() {});
+      // Hand the hardware decoder back NOW rather than at page teardown: these
+      // boxes have very few OMX instances and the channel player needs one the
+      // moment the user opens a stream. Deferred to after this frame so the
+      // rebuild above has already dropped the [Video] widget, and because this
+      // can be reached from inside the player's own completion callback.
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _releaseBootPlayer());
+    } else {
+      _releaseBootPlayer();
+    }
     _maybeNavigate();
   }
 
+  /// Tears down the boot player and its subscriptions. Idempotent.
+  void _releaseBootPlayer() {
+    for (final s in _bootSubs) {
+      s.cancel();
+    }
+    _bootSubs.clear();
+    final player = _bootPlayer;
+    _bootPlayer = null;
+    _bootController = null;
+    if (player != null) unawaited(player.dispose());
+  }
+
   void _init() async {
-    await context.read<LocalStorage>().init();
+    final storage = context.read<LocalStorage>();
+    await storage.init();
+    // Overscan calibration is read once here and then drives the whole app from
+    // MaterialApp.builder — do it before the first real route is shown, or the
+    // UI would visibly jump from 100% to the saved value.
+    await StbScreenSizeController.instance.load(storage);
     // Storage is ready — load the persisted UI locale (French by default).
     context.read<LocalizationCubit>().getLocale();
 
@@ -135,6 +249,12 @@ class _SplashPageState extends State<SplashPage> {
       unawaited(context.read<KioskLockController>().restore());
       context.read<DeviceRegistrationHandler>().startCommandPolling();
 
+      // No cable AND Wi-Fi radio off = stranded: Android persists the radio
+      // state across reboots, so a box last left in "wired" mode comes up
+      // still waiting on a cable that isn't there. Re-enable Wi-Fi so it can
+      // re-associate with a saved network.
+      unawaited(context.read<NetworkCubit>().ensureBootConnectivity());
+
       // Reclaim space from a previously downloaded update APK — after a
       // successful update the box has relaunched into the new build, so the
       // leftover file is dead weight. Safe at startup: no install in flight.
@@ -157,10 +277,7 @@ class _SplashPageState extends State<SplashPage> {
   @override
   void dispose() {
     _bootTimer?.cancel();
-    for (final s in _bootSubs) {
-      s.cancel();
-    }
-    _bootPlayer?.dispose();
+    _releaseBootPlayer();
     super.dispose();
   }
 
@@ -176,10 +293,37 @@ class _SplashPageState extends State<SplashPage> {
         _maybeNavigate();
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF0E0F13),
-        body: _showBootVideo
-            ? _BootAnimation(controller: _bootController!)
-            : const _BrandedSplash(),
+        backgroundColor: _splashBackground,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Legacy boxes: the native surface must be MOUNTED to play at all,
+            // so it sits here from the start and the branded splash covers it
+            // until a frame has genuinely been drawn.
+            if (_bootUsesSurface == true && !_bootDone && !_bootError)
+              StbSurfaceBootVideo(
+                url: _bootAsset,
+                onFirstFrame: () {
+                  if (mounted && !_bootFirstFrame) {
+                    setState(() => _bootFirstFrame = true);
+                  }
+                },
+                onEnded: _finishBoot,
+              ),
+
+            // Modern boxes keep the mpv path, which has never shown the green.
+            if (_bootUsesSurface == false && _showBootVideo)
+              _BootAnimation(controller: _bootController!),
+
+            // The shield. Opaque on purpose: it must hide the video surface
+            // during decoder init, which is the window that renders green.
+            if (!_showBootVideo)
+              const ColoredBox(
+                color: _splashBackground,
+                child: _BrandedSplash(),
+              ),
+          ],
+        ),
       ),
     );
   }
