@@ -184,6 +184,24 @@ abstract class AppLocalizations {
   /// **'On Demand'**
   String get navOnDemand;
 
+  /// No description provided for @radioComingSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming Soon'**
+  String get radioComingSoon;
+
+  /// No description provided for @radioComingSoonTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Radio is coming soon'**
+  String get radioComingSoonTitle;
+
+  /// No description provided for @radioComingSoonBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Our radio schedule is being prepared. It will appear here as soon as it is ready.'**
+  String get radioComingSoonBody;
+
   /// No description provided for @navRadio.
   ///
   /// In en, this message translates to:

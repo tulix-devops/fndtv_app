@@ -51,6 +51,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get navOnDemand => 'À la demande';
 
   @override
+  String get radioComingSoon => 'Bientôt disponible';
+
+  @override
+  String get radioComingSoonTitle => 'La radio arrive bientôt';
+
+  @override
+  String get radioComingSoonBody =>
+      'Notre grille radio est en préparation. Elle apparaîtra ici dès qu’elle sera prête.';
+
+  @override
   String get navRadio => 'Radio';
 
   @override

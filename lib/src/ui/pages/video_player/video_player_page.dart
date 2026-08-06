@@ -18,39 +18,57 @@ class VideoPlayerPage extends StatefulWidget {
 }
 
 class _VideoPlayerPageState extends State<VideoPlayerPage> {
-  @override
-  void initState() {
-    super.initState();
-    print('hello');
+  /// Captured once, before the user can rotate. [BuildContext.isTv] is derived
+  /// from the MediaQuery size, so reading it again after a flip to landscape
+  /// can give a different answer on a large screen.
+  bool _isTv = false;
+  bool _orientationApplied = false;
 
-    print(widget.video);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!context.isTv) {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]);
-      }
-    });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_orientationApplied) return;
+    _orientationApplied = true;
+    _isTv = context.isTv;
+
+    // Opens in portrait. Going landscape is the viewer's choice, made with the
+    // rotate control in the player — the app used to force the flip the instant
+    // an item was tapped.
+    if (!_isTv) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+    }
   }
 
   @override
   void dispose() {
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeRight,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
+    // Restore the app's baseline (see AppView._applyOrientation) instead of
+    // leaving all four enabled, which let the whole app rotate afterwards
+    // after a single visit to the player.
+    SystemChrome.setPreferredOrientations(
+      _isTv
+          ? const [
+              DeviceOrientation.landscapeLeft,
+              DeviceOrientation.landscapeRight,
+            ]
+          : const [
+              DeviceOrientation.portraitUp,
+              DeviceOrientation.portraitDown,
+            ],
+    );
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     String link = widget.video.sources.getPreferredVideoSource() ?? '';
-    print('this is the link ${link}');
 
     return Scaffold(
+        // Black, so the letterbox around a 16:9 picture in portrait reads as
+        // part of the player rather than as the app background showing through.
+        backgroundColor: Colors.black,
         body: widget.contentType == ContentType.radio
             ? Stack(
                 children: [

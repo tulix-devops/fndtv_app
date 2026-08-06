@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:chewie/chewie.dart';
 import 'package:commons/commons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -29,31 +32,15 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
   bool _loading = true;
   bool _error = false;
   bool _isGrid = false;
-  DateTime _selectedDate = DateTime.now();
+  // Fixed at page open: the schedule always covers the current day (the
+  // backend ignores the date parameter), so nothing can change this.
+  final DateTime _selectedDate = DateTime.now();
   List<LiveModel> _programs = const [];
 
   @override
   void initState() {
     super.initState();
     _fetchSchedule();
-  }
-
-  Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: now.subtract(const Duration(days: 14)),
-      lastDate: now.add(const Duration(days: 14)),
-    );
-    if (picked != null && mounted) {
-      setState(() {
-        _selectedDate = picked;
-        _loading = true;
-        _error = false;
-      });
-      _fetchSchedule();
-    }
   }
 
   Future<void> _fetchSchedule() async {
@@ -184,11 +171,7 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
                     colors: colors,
                   ),
                   const SizedBox(width: 10),
-                  _DateChip(
-                    date: _selectedDate,
-                    onTap: _pickDate,
-                    colors: colors,
-                  ),
+                  _DateChip(date: _selectedDate, colors: colors),
                 ],
               ),
             ),
@@ -249,7 +232,10 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
           crossAxisCount: 2,
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
-          childAspectRatio: 0.82,
+          // Sized to thumbnail + time + three title lines. At 0.82 the cards
+          // were tall enough for five, so every one ended in a block of empty
+          // space.
+          childAspectRatio: 0.95,
         ),
         itemCount: _programs.length,
         itemBuilder: (context, i) =>
@@ -329,38 +315,37 @@ class _ViewToggle extends StatelessWidget {
 // DATE CHIP
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Shows which day the schedule covers. Deliberately not tappable: the backend
+/// ignores the date parameter and always returns the current Paris calendar
+/// day, so a picker could only ever re-fetch the same list.
 class _DateChip extends StatelessWidget {
   final DateTime date;
-  final VoidCallback onTap;
   final UiKitColors colors;
 
-  const _DateChip({required this.date, required this.onTap, required this.colors});
+  const _DateChip({required this.date, required this.colors});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: colors.accent, width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              DateFormat('MMM d').format(date),
-              style: GoogleFonts.sora(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: colors.accent,
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.accent, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            DateFormat('MMM d').format(date),
+            style: GoogleFonts.sora(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: colors.accent,
             ),
-            const SizedBox(width: 6),
-            Icon(Icons.calendar_today_rounded, size: 14, color: colors.accent),
-          ],
-        ),
+          ),
+          const SizedBox(width: 6),
+          Icon(Icons.calendar_today_rounded, size: 14, color: colors.accent),
+        ],
       ),
     );
   }
@@ -412,6 +397,37 @@ class _InlineLivePlayerState extends State<_InlineLivePlayer> {
           autoPlay: true,
           looping: false,
           allowFullScreen: true,
+          // This page only ever plays the channel's live source, so there is
+          // nothing to scrub. Without this chewie draws a progress bar, a
+          // position/duration readout and ±10s buttons over the HLS live
+          // window, which reported nonsense like "00:04 / 00:12".
+          isLive: true,
+          // Chewie's own live layout is `[Expanded(LIVE)] [mute] [Spacer]
+          // [fullscreen]`, which splits the free space in two and leaves mute
+          // floating in the middle of the bar with the options button off on
+          // its own edge — placement by accident. See [_LiveControls].
+          //
+          // Passed as `overlay` rather than `customControls` deliberately: in
+          // fullscreen chewie wraps customControls in SafeArea, so a landscape
+          // display cutout insets the layer and everything centred in it lands
+          // off-centre by half the inset. `overlay` sits in the same Stack with
+          // no SafeArea, so it spans the true player bounds.
+          showControls: false,
+          overlay: const Positioned.fill(child: _LiveControls()),
+          // Explicit, because the default infers rotation from
+          // `videoPlayerController.value.size` — and if the stream has not
+          // reported its dimensions yet both are 0, which falls through to the
+          // "square video" branch and does not rotate at all.
+          deviceOrientationsOnEnterFullScreen: const [
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ],
+          deviceOrientationsAfterFullScreen: const [
+            DeviceOrientation.portraitUp,
+            DeviceOrientation.portraitDown,
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ],
           aspectRatio: 16 / 9,
           materialProgressColors: ChewieProgressColors(
             playedColor: const Color(0xFFA83734),
@@ -454,6 +470,276 @@ class _InlineLivePlayerState extends State<_InlineLivePlayer> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// LIVE PLAYER CONTROLS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Controls for a live-only player: three anchors, nothing floating.
+///
+///   ● LIVE ─ top-left        play/pause ─ dead centre        mute + full ─
+///                                                            bottom-right
+///
+/// Replaces chewie's material controls, which spread a live stream's four
+/// elements across the bar with no relationship between them. Building our own
+/// also means the badge is localized — chewie hardcodes the English "LIVE".
+class _LiveControls extends StatefulWidget {
+  const _LiveControls();
+
+  @override
+  State<_LiveControls> createState() => _LiveControlsState();
+}
+
+class _LiveControlsState extends State<_LiveControls> {
+  static const _fade = Duration(milliseconds: 250);
+  static const _autoHideAfter = Duration(seconds: 3);
+
+  bool _visible = true;
+  Timer? _hideTimer;
+  ChewieController? _chewie;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Captured here rather than read inside the timer callback:
+    // ChewieController.of registers an inherited-widget dependency, which
+    // belongs in build/didChangeDependencies, not in an async callback.
+    _chewie = ChewieController.of(context);
+    _restartHideTimer();
+  }
+
+  @override
+  void dispose() {
+    _hideTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Only auto-hides while playing — controls left up over a paused frame are
+  /// what the viewer is reaching for.
+  void _restartHideTimer() {
+    _hideTimer?.cancel();
+    _hideTimer = Timer(_autoHideAfter, () {
+      if (mounted && (_chewie?.isPlaying ?? false)) {
+        setState(() => _visible = false);
+      }
+    });
+  }
+
+  void _toggleVisible() {
+    setState(() => _visible = !_visible);
+    if (_visible) _restartHideTimer();
+  }
+
+  /// Pressing a control also re-arms the timer, so the bar doesn't vanish
+  /// mid-interaction.
+  void _act(VoidCallback action) {
+    action();
+    setState(_restartHideTimer);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chewie = ChewieController.of(context);
+    final controller = chewie.videoPlayerController;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Sized from the player, so it is proportionate inline and fullscreen
+        // rather than a fixed size that only suits one of them.
+        final buttonSize = (constraints.maxWidth * 0.16).clamp(48.0, 72.0);
+
+        return ValueListenableBuilder<VideoPlayerValue>(
+          valueListenable: controller,
+          builder: (context, value, _) {
+            final muted = value.volume == 0;
+
+            // Corner controls keep clear of a display cutout, but only in
+            // fullscreen: inline, nothing above has consumed the status-bar
+            // padding yet, so a SafeArea here would shove the badge down into
+            // the middle of a player that sits well below the status bar.
+            Widget corners = Stack(
+              children: [
+                const Positioned(top: 10, left: 12, child: _LiveBadge()),
+                // Mute and fullscreen are both player chrome, so they sit
+                // together in one corner rather than at opposite ends.
+                Positioned(
+                  right: 8,
+                  bottom: 8,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _IconButton(
+                        icon: muted
+                            ? Icons.volume_off_rounded
+                            : Icons.volume_up_rounded,
+                        onPressed: () =>
+                            _act(() => chewie.setVolume(muted ? 1 : 0)),
+                      ),
+                      _IconButton(
+                        icon: chewie.isFullScreen
+                            ? Icons.fullscreen_exit_rounded
+                            : Icons.fullscreen_rounded,
+                        onPressed: () => _act(chewie.toggleFullScreen),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+            if (chewie.isFullScreen) corners = SafeArea(child: corners);
+
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                // Tap-anywhere catcher, underneath everything so it only
+                // receives taps that miss an actual button.
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _toggleVisible,
+                ),
+
+                IgnorePointer(
+                  ignoring: !_visible,
+                  child: AnimatedOpacity(
+                    opacity: _visible ? 1 : 0,
+                    duration: _fade,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // No full-surface scrim: over a player this small it
+                        // reads as a murky wash across the picture. Each
+                        // control carries its own backing instead.
+                        Center(
+                          child: _CenterButton(
+                            size: buttonSize,
+                            isBuffering: value.isBuffering,
+                            isPlaying: value.isPlaying,
+                            onPressed: () => _act(chewie.togglePause),
+                          ),
+                        ),
+                        corners,
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// Same shape as the channel tiles' status pill, but localized and sized for
+/// an overlay.
+class _LiveBadge extends StatelessWidget {
+  const _LiveBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: context.uiKitColors.accent,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.circle, size: 7, color: Colors.white),
+          const SizedBox(width: 5),
+          Text(
+            context.l.badgeLive,
+            style: GoogleFonts.sora(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              letterSpacing: 0.8,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CenterButton extends StatelessWidget {
+  final double size;
+  final bool isBuffering;
+  final bool isPlaying;
+  final VoidCallback onPressed;
+
+  const _CenterButton({
+    required this.size,
+    required this.isBuffering,
+    required this.isPlaying,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isBuffering) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: const Center(
+          child: SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+          ),
+        ),
+      );
+    }
+
+    return Material(
+      color: Colors.black.withValues(alpha: 0.55),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPressed,
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Icon(
+            isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+            color: Colors.white,
+            size: size * 0.5,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  const _IconButton({required this.icon, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: Material(
+        // Its own disc, now that there is no scrim to keep the icon legible
+        // against a bright frame.
+        color: Colors.black.withValues(alpha: 0.55),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.all(7),
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DVR / SCHEDULE ROW  (full-width, one per row)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -480,70 +766,130 @@ class _DvrRow extends StatelessWidget {
     final start = _fmtTime(program.startsAt);
     final end = _fmtTime(program.endsAt);
 
-    final titleColor = isCurrent ? Colors.white : colors.textMuted;
+    final titleColor = isCurrent ? Colors.white : colors.textPrimary;
     final timeColor = isCurrent ? Colors.white : colors.accent;
-    final range = end.isEmpty ? start : '$start - $end';
+    final range = end.isEmpty ? start : '$start – $end';
 
     return Container(
-      height: 62,
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: isCurrent ? colors.accent : const Color(0xFFF6E3E3),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          width: 1,
-          color: isCurrent ? colors.accent : const Color(0xFFE2B6B6),
-        ),
-      ),
+      height: 78,
+      padding: const EdgeInsets.all(10),
+      decoration: _scheduleCardDecoration(colors, isCurrent),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: SizedBox(
-              width: 88,
-              height: 50,
-              child: hasThumb
-                  ? Image.network(
-                      thumb,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: colors.bgSurface,
-                        child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 22),
-                      ),
-                    )
-                  : Container(
-                      color: colors.bgSurface,
-                      child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 22),
-                    ),
-            ),
+          _ProgramThumb(
+            url: thumb,
+            hasThumb: hasThumb,
+            width: 104,
+            height: 58,
+            radius: 9,
+            iconSize: 22,
+            colors: colors,
           ),
-          const SizedBox(width: 10),
-          // Title (secondary — trimmed to a single line)
+          const SizedBox(width: 12),
+          // Time above the title rather than in a right-hand column: every row's
+          // time then starts at the same x (still scannable), and the title gets
+          // the whole remaining width instead of ~100px, which is what was
+          // truncating it to "Trip Around the World...".
           Expanded(
-            child: Text(
-              program.title,
-              style: GoogleFonts.sora(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w500,
-                color: titleColor,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (range.isNotEmpty)
+                  Text(
+                    range,
+                    style: GoogleFonts.sora(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: timeColor,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                const SizedBox(height: 4),
+                // Flexible, not a bare Text: the row height is fixed so the list
+                // scans evenly, and at a large system font scale two lines no
+                // longer fit — this drops to one and ellipsizes instead of
+                // overflowing.
+                Flexible(
+                  child: Text(
+                    program.title,
+                    style: GoogleFonts.sora(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                      height: 1.3,
+                      color: titleColor,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 10),
-          // Time range (primary — full range, prominent)
-          if (range.isNotEmpty)
-            Text(
-              range,
-              style: GoogleFonts.sora(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: timeColor,
-              ),
-            ),
         ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHARED SCHEDULE CARD PIECES
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Same recipe as every other card in the app (About, radio rows, guide chips):
+/// a neutral surface on the dark page plus a hairline border. The schedule used
+/// to be the one place with a light-pink fill, which is what made it stick out.
+BoxDecoration _scheduleCardDecoration(UiKitColors colors, bool isCurrent) {
+  return BoxDecoration(
+    color: isCurrent ? colors.accent : colors.bgCard,
+    borderRadius: BorderRadius.circular(14),
+    border: Border.all(
+      width: isCurrent ? 1 : 0.5,
+      color: isCurrent ? colors.accent : colors.border,
+    ),
+  );
+}
+
+class _ProgramThumb extends StatelessWidget {
+  final String url;
+  final bool hasThumb;
+  final double? width;
+  final double? height;
+  final double radius;
+  final double iconSize;
+  final UiKitColors colors;
+
+  const _ProgramThumb({
+    required this.url,
+    required this.hasThumb,
+    required this.radius,
+    required this.iconSize,
+    required this.colors,
+    this.width,
+    this.height,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // bgPrimary, not bgSurface: the card itself is bgCard, and bgSurface is the
+    // same value — the placeholder would be invisible against it.
+    Widget fallback() => Container(
+          color: colors.bgPrimary,
+          child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: iconSize),
+        );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: hasThumb
+            ? Image.network(
+                url,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => fallback(),
+              )
+            : fallback(),
       ),
     );
   }
@@ -566,41 +912,25 @@ class _DvrGridCard extends StatelessWidget {
     final hasThumb = thumb.isNotEmpty && thumb != defaultPosterImage;
     final start = _fmtTime(program.startsAt);
     final end = _fmtTime(program.endsAt);
-    final range = end.isEmpty ? start : '$start - $end';
+    final range = end.isEmpty ? start : '$start – $end';
 
     final titleColor = isCurrent ? Colors.white : colors.textPrimary;
     final timeColor = isCurrent ? Colors.white : colors.accent;
 
     return Container(
       padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: isCurrent ? colors.accent : const Color(0xFFF6E3E3),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          width: 1,
-          color: isCurrent ? colors.accent : const Color(0xFFE2B6B6),
-        ),
-      ),
+      decoration: _scheduleCardDecoration(colors, isCurrent),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: hasThumb
-                  ? Image.network(
-                      thumb,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: colors.bgSurface,
-                        child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 26),
-                      ),
-                    )
-                  : Container(
-                      color: colors.bgSurface,
-                      child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 26),
-                    ),
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: _ProgramThumb(
+              url: thumb,
+              hasThumb: hasThumb,
+              radius: 10,
+              iconSize: 26,
+              colors: colors,
             ),
           ),
           const SizedBox(height: 8),
@@ -611,6 +941,7 @@ class _DvrGridCard extends StatelessWidget {
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: timeColor,
+                letterSpacing: 0.2,
               ),
             ),
           const SizedBox(height: 4),
@@ -618,9 +949,9 @@ class _DvrGridCard extends StatelessWidget {
             child: Text(
               program.title,
               style: GoogleFonts.sora(
-                fontSize: 11.5,
+                fontSize: 12,
                 fontWeight: FontWeight.w500,
-                height: 1.25,
+                height: 1.3,
                 color: titleColor,
               ),
               maxLines: 3,
