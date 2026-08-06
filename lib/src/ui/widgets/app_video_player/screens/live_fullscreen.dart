@@ -36,6 +36,24 @@ class _LiveFullscreenState extends State<LiveFullscreen> {
   final FocusNode dvrFocus = FocusNode();
   late FocusNode playPauseFocus;
 
+  /// Captured once, while still portrait. [BuildContext.isTv] is size-derived
+  /// and flips to true when a 420dpi phone rotates to landscape (923x411,
+  /// diagonal 1011 clears both its thresholds), so it must not be read during
+  /// build. Same guard as VodFullScreen.
+  bool _isTv = false;
+  bool _isTvCaptured = false;
+
+  /// Read every build, unlike [_isTv]: these genuinely differ per orientation.
+  EdgeInsets get _safeInsets => MediaQuery.of(context).padding;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_isTvCaptured) return;
+    _isTvCaptured = true;
+    _isTv = context.isTv;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -98,10 +116,12 @@ class _LiveFullscreenState extends State<LiveFullscreen> {
     return Stack(
       children: [
         if (context.read<VideoPlayerCubit>().state.isVisible) const BlackBackground(),
+        // 60/20 is TV overscan margin; on a phone it indents oddly and tucks
+        // the controls under the status bar. Matches VodFullScreen.
         if (widget.showBackButton)
           Positioned(
-            left: 60,
-            top: 20,
+            left: _isTv ? 60 : _safeInsets.left + 10,
+            top: _isTv ? 20 : _safeInsets.top + 8,
             child: VideoButton(
               onPressed: (_) => context.pop(),
               icon: Assets.arrowLeft,
@@ -110,8 +130,8 @@ class _LiveFullscreenState extends State<LiveFullscreen> {
           ),
         if (widget.video.hasDvr)
           Positioned(
-            right: 60,
-            top: 20,
+            right: _isTv ? 60 : _safeInsets.right + 10,
+            top: _isTv ? 20 : _safeInsets.top + 8,
             child: Focus(
               focusNode: dvrFocus,
               onKeyEvent: (node, event) {

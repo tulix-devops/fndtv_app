@@ -186,7 +186,16 @@ class _AppVideoPlayerState extends State<AppVideoPlayer> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          VideoPlayer(_videoPlayerController!),
+          // A bare VideoPlayer takes the Stack's full size, which stretched the
+          // picture to whatever shape the screen happened to be. Tolerable when
+          // the page was always forced landscape; badly distorting now that it
+          // can open portrait.
+          Center(
+            child: AspectRatio(
+              aspectRatio: _videoPlayerController!.value.aspectRatio,
+              child: VideoPlayer(_videoPlayerController!),
+            ),
+          ),
           ValueListenableBuilder<bool>(
             valueListenable: _isLoading,
             builder: (context, isLoading, _) {

@@ -27,6 +27,17 @@ class VodFullScreen extends StatefulWidget {
 class _VodFullScreenState extends State<VodFullScreen> {
   late final FocusNode playPauseFocus;
   late final FocusNode arrowBackFocus;
+  final FocusNode orientationFocus = FocusNode(skipTraversal: true);
+
+  /// Captured once, while still portrait.
+  ///
+  /// [BuildContext.isTv] is derived from the MediaQuery size, and on a 420dpi
+  /// phone the landscape logical size (923x411, diagonal 1011) clears both its
+  /// thresholds — so reading it during build makes the device "become a TV" the
+  /// moment it rotates, which hid the rotate control and stranded the viewer in
+  /// landscape with no way back.
+  bool _isTv = false;
+  bool _isTvCaptured = false;
 
   ({int selectedPage, int selectedItemIndex})? selectedLinkIndexes;
 
@@ -95,10 +106,44 @@ class _VodFullScreenState extends State<VodFullScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Guarded: this fires again on every rotation, which is precisely when the
+    // answer would change.
+    if (_isTvCaptured) return;
+    _isTvCaptured = true;
+    _isTv = context.isTv;
+  }
+
+  @override
   void dispose() {
     arrowBackFocus.dispose();
     playPauseFocus.dispose();
+    orientationFocus.dispose();
     super.dispose();
+  }
+
+  /// Flips between portrait and landscape on demand.
+  ///
+  /// The player opens portrait now, so this is how a viewer opts into
+  /// landscape. Each tap locks the orientation it selects rather than handing
+  /// control back to the accelerometer, so the control is predictable: tap to
+  /// go wide, tap again to come back. [VideoPlayerPage] restores the app's
+  /// portrait baseline when the page is popped.
+  void _toggleOrientation(BuildContext context) {
+    final isPortrait =
+        MediaQuery.of(context).orientation == Orientation.portrait;
+    SystemChrome.setPreferredOrientations(
+      isPortrait
+          ? const [
+              DeviceOrientation.landscapeLeft,
+              DeviceOrientation.landscapeRight,
+            ]
+          : const [
+              DeviceOrientation.portraitUp,
+              DeviceOrientation.portraitDown,
+            ],
+    );
   }
 
   String _playIcon() {
@@ -110,6 +155,10 @@ class _VodFullScreenState extends State<VodFullScreen> {
     isPlaying ? widget.controller.pause() : widget.controller.play();
     setState(() {});
   }
+
+  /// Read every build, unlike [_isTv]: the notch/status-bar insets genuinely
+  /// differ between portrait and landscape, so these must follow rotation.
+  EdgeInsets get _safeInsets => MediaQuery.of(context).padding;
 
   @override
   Widget build(BuildContext context) {
@@ -124,9 +173,13 @@ class _VodFullScreenState extends State<VodFullScreen> {
           children: [
             if (state.isVisible) const BlackBackground(),
             if (!isSeasonsOpen) ...[
+              // 60/20 is TV overscan margin. On a phone it reads as an
+              // arbitrary indent, and top:20 tucks the arrow up under the
+              // status bar — so inset from the safe area instead, with the
+              // left edge lined up with the control row below.
               Positioned(
-                left: 60,
-                top: 20,
+                left: _isTv ? 60 : _safeInsets.left + 10,
+                top: _isTv ? 20 : _safeInsets.top + 8,
                 child: VideoButton(
                   onPressed: (ctx) {
                     context.pop();
@@ -154,6 +207,17 @@ class _VodFullScreenState extends State<VodFullScreen> {
                       ),
                     ),
                     Flexible(flex: 7, child: getVodSeekbar(context)),
+                    // Not on TV: there is no orientation to change there, and
+                    // no pointer to tap it with.
+                    if (!_isTv)
+                      Flexible(
+                        flex: 2,
+                        child: VideoButton(
+                          onPressed: _toggleOrientation,
+                          icon: Assets.videoFullScreen,
+                          focusNode: orientationFocus,
+                        ),
+                      ),
                   ],
                 ),
               ),
