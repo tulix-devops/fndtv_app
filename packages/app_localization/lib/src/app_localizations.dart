@@ -334,12 +334,6 @@ abstract class AppLocalizations {
   /// **'Live now'**
   String get sectionLiveNow;
 
-  /// No description provided for @sectionChicagoTime.
-  ///
-  /// In en, this message translates to:
-  /// **'Chicago time'**
-  String get sectionChicagoTime;
-
   /// No description provided for @sectionRadio.
   ///
   /// In en, this message translates to:
@@ -364,17 +358,23 @@ abstract class AppLocalizations {
   /// **'LIVE'**
   String get badgeLive;
 
-  /// No description provided for @badgeUsTime.
-  ///
-  /// In en, this message translates to:
-  /// **'US TIME'**
-  String get badgeUsTime;
-
   /// No description provided for @badgeOnAir.
   ///
   /// In en, this message translates to:
   /// **'ON AIR'**
   String get badgeOnAir;
+
+  /// No description provided for @badgeNow.
+  ///
+  /// In en, this message translates to:
+  /// **'NOW'**
+  String get badgeNow;
+
+  /// No description provided for @sectionSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule'**
+  String get sectionSchedule;
 
   /// No description provided for @brandRadio.
   ///
@@ -411,6 +411,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to load channels'**
   String get channelsLoadError;
+
+  /// No description provided for @contentUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Temporarily unavailable'**
+  String get contentUnavailableTitle;
+
+  /// No description provided for @contentUnavailableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We are having a temporary issue loading content. Please try again in a moment.'**
+  String get contentUnavailableBody;
 
   /// No description provided for @retry.
   ///
@@ -501,6 +513,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dark Theme'**
   String get settingsDarkTheme;
+
+  /// No description provided for @navSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get navSettings;
+
+  /// No description provided for @settingsScreenSizeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen Size'**
+  String get settingsScreenSizeTitle;
+
+  /// No description provided for @settingsScreenSizeSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Resize the picture to fit your TV'**
+  String get settingsScreenSizeSubtitle;
+
+  /// No description provided for @settingsScreenSizeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the arrows to resize · OK saves · Back cancels'**
+  String get settingsScreenSizeHint;
+
+  /// No description provided for @settingsScreenSizeReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to 100%'**
+  String get settingsScreenSizeReset;
+
+  /// No description provided for @settingsScreenSizeWidth.
+  ///
+  /// In en, this message translates to:
+  /// **'Width'**
+  String get settingsScreenSizeWidth;
+
+  /// No description provided for @settingsScreenSizeHeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Height'**
+  String get settingsScreenSizeHeight;
+
+  /// No description provided for @settingsScreenSizeSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get settingsScreenSizeSave;
+
+  /// No description provided for @settingsScreenSizeCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get settingsScreenSizeCancel;
+
+  /// No description provided for @settingsScreenSizeAxisWidth.
+  ///
+  /// In en, this message translates to:
+  /// **'width'**
+  String get settingsScreenSizeAxisWidth;
+
+  /// No description provided for @settingsScreenSizeAxisHeight.
+  ///
+  /// In en, this message translates to:
+  /// **'height'**
+  String get settingsScreenSizeAxisHeight;
+
+  /// No description provided for @settingsScreenSizeSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get settingsScreenSizeSaved;
+
+  /// No description provided for @radioComingSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming Soon'**
+  String get radioComingSoon;
+
+  /// No description provided for @radioComingSoonTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Radio is coming soon'**
+  String get radioComingSoonTitle;
+
+  /// No description provided for @radioComingSoonBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Our radio schedule is being prepared. It will appear here as soon as it is ready.'**
+  String get radioComingSoonBody;
 
   /// No description provided for @navNetwork.
   ///

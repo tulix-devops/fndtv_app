@@ -126,9 +126,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get sectionLiveNow => 'En vivo ahora';
 
   @override
-  String get sectionChicagoTime => 'Hora de Chicago';
-
-  @override
   String get sectionRadio => 'Radio';
 
   @override
@@ -141,10 +138,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get badgeLive => 'EN VIVO';
 
   @override
-  String get badgeUsTime => 'HORA EE. UU.';
+  String get badgeOnAir => 'AL AIRE';
 
   @override
-  String get badgeOnAir => 'AL AIRE';
+  String get badgeNow => 'AHORA';
+
+  @override
+  String get sectionSchedule => 'Programación';
 
   @override
   String get brandRadio => 'FNDTV Radio';
@@ -163,6 +163,13 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get channelsLoadError => 'Error al cargar los canales';
+
+  @override
+  String get contentUnavailableTitle => 'Temporalmente no disponible';
+
+  @override
+  String get contentUnavailableBody =>
+      'Estamos teniendo un problema temporal al cargar el contenido. Vuelva a intentarlo en un momento.';
 
   @override
   String get retry => 'Reintentar';
@@ -214,6 +221,53 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get settingsDarkTheme => 'Tema oscuro';
+
+  @override
+  String get navSettings => 'Ajustes';
+
+  @override
+  String get settingsScreenSizeTitle => 'Tamaño de pantalla';
+
+  @override
+  String get settingsScreenSizeSubtitle => 'Ajusta la imagen a tu televisor';
+
+  @override
+  String get settingsScreenSizeHint =>
+      'Usa las flechas · OK guarda · Atrás cancela';
+
+  @override
+  String get settingsScreenSizeReset => 'Restablecer al 100 %';
+
+  @override
+  String get settingsScreenSizeWidth => 'Ancho';
+
+  @override
+  String get settingsScreenSizeHeight => 'Alto';
+
+  @override
+  String get settingsScreenSizeSave => 'Guardar';
+
+  @override
+  String get settingsScreenSizeCancel => 'Cancelar';
+
+  @override
+  String get settingsScreenSizeAxisWidth => 'ancho';
+
+  @override
+  String get settingsScreenSizeAxisHeight => 'alto';
+
+  @override
+  String get settingsScreenSizeSaved => 'Guardado';
+
+  @override
+  String get radioComingSoon => 'Próximamente';
+
+  @override
+  String get radioComingSoonTitle => 'La radio llegará pronto';
+
+  @override
+  String get radioComingSoonBody =>
+      'Estamos preparando la programación de radio. Aparecerá aquí en cuanto esté lista.';
 
   @override
   String get navNetwork => 'Red';

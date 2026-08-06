@@ -46,14 +46,15 @@
   "navMenu": "Menu",
 
   "sectionLiveNow": "En direct",
-  "sectionChicagoTime": "Heure de Chicago",
   "sectionRadio": "Radio",
   "sectionLiveTv": "TV en direct",
   "sectionOnDemand": "À la demande",
 
   "badgeLive": "DIRECT",
-  "badgeUsTime": "HEURE US",
   "badgeOnAir": "À L’ANTENNE",
+  "badgeNow": "EN COURS",
+
+  "sectionSchedule": "Programme",
 
   "brandRadio": "FNDTV Radio",
   "noRadioChannel": "Aucune chaîne radio disponible",
@@ -62,6 +63,8 @@
   "scheduleLoadError": "Impossible de charger la grille",
   "noSchedule": "Aucun programme disponible",
   "channelsLoadError": "Échec du chargement des chaînes",
+  "contentUnavailableTitle": "Temporairement indisponible",
+  "contentUnavailableBody": "Nous rencontrons un problème temporaire lors du chargement du contenu. Veuillez réessayer dans un instant.",
   "retry": "Réessayer",
 
   "aboutWhatTitle": "Qu’est-ce que FNDTV ?",
@@ -79,6 +82,21 @@
 
   "settingsBlueTheme": "Thème bleu",
   "settingsDarkTheme": "Thème sombre",
+  "navSettings": "Réglages",
+  "settingsScreenSizeTitle": "Taille de l’écran",
+  "settingsScreenSizeSubtitle": "Ajustez l’image à votre téléviseur",
+  "settingsScreenSizeHint": "Utilisez les flèches · OK enregistre · Retour annule",
+  "settingsScreenSizeReset": "Réinitialiser à 100 %",
+  "settingsScreenSizeWidth": "Largeur",
+  "settingsScreenSizeHeight": "Hauteur",
+  "settingsScreenSizeSave": "Enregistrer",
+  "settingsScreenSizeCancel": "Annuler",
+  "settingsScreenSizeAxisWidth": "largeur",
+  "settingsScreenSizeAxisHeight": "hauteur",
+  "settingsScreenSizeSaved": "Enregistré",
+  "radioComingSoon": "Bientôt disponible",
+  "radioComingSoonTitle": "La radio arrive bientôt",
+  "radioComingSoonBody": "Notre grille radio est en préparation. Elle apparaîtra ici dès qu’elle sera prête.",
 
   "navNetwork": "Réseau",
   "networkTitle": "Réseau",
