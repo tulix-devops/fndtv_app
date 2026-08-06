@@ -70,11 +70,15 @@ dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/img/app_icon.png"
+  # Sources live in assets/launcher/, NOT assets/img/. pubspec globs
+  # `assets/img/` into the bundle, so keeping 1024x1024 icon sources there
+  # shipped 1.35 MB of PNGs the app never reads at runtime — they are only
+  # inputs to `dart run flutter_launcher_icons`.
+  image_path: "assets/launcher/app_icon.png"
   remove_alpha_ios: true
   background_color: "#000000"
   adaptive_icon_background: "#000000"
-  adaptive_icon_foreground: "assets/img/app_icon_foreground.png"
+  adaptive_icon_foreground: "assets/launcher/app_icon_foreground.png"
 
 dev_dependencies:
   flutter_test:
