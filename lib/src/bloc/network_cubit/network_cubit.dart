@@ -115,9 +115,20 @@ class NetworkCubit extends Cubit<NetworkState> {
     ));
   }
 
-  Future<void> scan() async {
+  /// Scans for networks. [retries] re-scans when the first pass comes back
+  /// empty: enabling the radio doesn't make results available immediately —
+  /// the supplicant needs a moment to come up — so a scan fired right after
+  /// switching to Wi-Fi would otherwise show "no networks found".
+  Future<void> scan({int retries = 0, Duration retryDelay = const Duration(seconds: 2)}) async {
     emit(state.copyWith(scanning: true));
-    final networks = await _service.scan();
+    var networks = await _service.scan();
+    var left = retries;
+    while (networks.isEmpty && left > 0) {
+      await Future<void>.delayed(retryDelay);
+      if (isClosed) return;
+      networks = await _service.scan();
+      left--;
+    }
     if (isClosed) return;
     emit(state.copyWith(scanning: false, networks: networks));
   }
@@ -159,10 +170,37 @@ class NetworkCubit extends Cubit<NetworkState> {
       emit(state.copyWith(joinPhase: NetworkJoinPhase.idle, joiningSsid: () => null));
 
   /// Wired ⇄ Wi-Fi switch: "wired" = Wi-Fi off (Ethernet takes over).
+  ///
+  /// Switching TO Wi-Fi also (re)scans, so the user immediately sees the
+  /// available networks to pick from — the radio was off until now, so the
+  /// list was necessarily empty.
   Future<void> setUseWifi(bool useWifi) async {
     await _service.setWifiEnabled(useWifi);
+    if (isClosed) return;
     await refreshStatus();
+    if (isClosed) return;
     await _observer.recheck();
+    if (isClosed) return;
+    if (useWifi) await scan(retries: 3);
+  }
+
+  /// Boot-time safety net: if there is no Ethernet carrier (cable unplugged)
+  /// and the Wi-Fi radio is off, the box has no way back online — Android
+  /// persists the radio state across reboots, so a box last left in "wired"
+  /// mode comes up stranded, still waiting on a cable that isn't there.
+  /// Turning the radio back on lets it re-associate with a saved network.
+  ///
+  /// Returns true when it had to intervene.
+  Future<bool> ensureBootConnectivity() async {
+    await refreshStatus();
+    if (isClosed) return false;
+    if (state.ethernetLinked || state.wifiEnabled) return false;
+    await _service.setWifiEnabled(true);
+    if (isClosed) return false;
+    await refreshStatus();
+    if (isClosed) return false;
+    await _observer.recheck();
+    return true;
   }
 
   void suppressOverlay(bool suppressed) =>

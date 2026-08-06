@@ -39,17 +39,51 @@ class TvNetworkView extends StatefulWidget {
 }
 
 class _TvNetworkViewState extends State<TvNetworkView> {
+  /// Focus targets for the two mode buttons, so entry focus can land on the
+  /// connection that is actually in use rather than always on Wi-Fi.
+  final FocusNode _wifiFocus = FocusNode(debugLabel: 'net-mode-wifi');
+  final FocusNode _wiredFocus = FocusNode(debugLabel: 'net-mode-wired');
+
+  bool _statusLoaded = false;
+  bool _focusApplied = false;
+
   @override
   void initState() {
     super.initState();
     final cubit = context.read<NetworkCubit>();
     cubit.suppressOverlay(true);
-    cubit.refreshStatus();
-    cubit.scan();
+    _bootstrap(cubit);
+  }
+
+  /// Status first: the initial D-pad focus has to know which connection is
+  /// current before it can land on it. Then scan for networks.
+  Future<void> _bootstrap(NetworkCubit cubit) async {
+    await cubit.refreshStatus();
+    if (!mounted) return;
+    setState(() => _statusLoaded = true);
+    await cubit.scan();
+  }
+
+  /// Puts entry focus on the button for the connection currently in use.
+  /// Runs once, and only after the real status has landed — `autofocus` alone
+  /// can't do this because it is evaluated on first mount, when the status is
+  /// still unknown (and would therefore always read as "wired").
+  void _maybeApplyInitialFocus(NetworkState net) {
+    if (_focusApplied || !_statusLoaded || !widget.autofocusOnEnter) return;
+    // Without manage rights the mode buttons aren't rendered; the Scan
+    // button's own autofocus covers that case.
+    if (!net.canManage) return;
+    _focusApplied = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      (net.wifiEnabled ? _wifiFocus : _wiredFocus).requestFocus();
+    });
   }
 
   @override
   void dispose() {
+    _wifiFocus.dispose();
+    _wiredFocus.dispose();
     context.read<NetworkCubit>().suppressOverlay(false);
     super.dispose();
   }
@@ -88,6 +122,7 @@ class _TvNetworkViewState extends State<TvNetworkView> {
       padding: const EdgeInsets.fromLTRB(48, 36, 48, 24),
       child: BlocBuilder<NetworkCubit, NetworkState>(
         builder: (context, net) {
+          _maybeApplyInitialFocus(net);
           return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -133,16 +168,19 @@ class _TvNetworkViewState extends State<TvNetworkView> {
             if (net.canManage) ...[
               Row(
                 children: [
+                  // Entry focus is placed on whichever of these is the current
+                  // connection (see _maybeApplyInitialFocus), not hardcoded.
                   _ModeButton(
                     label: l.networkModeWifi,
                     active: net.wifiEnabled,
-                    autofocus: widget.autofocusOnEnter,
+                    focusNode: _wifiFocus,
                     onTap: () => _onModeChanged(true),
                   ),
                   const SizedBox(width: 10),
                   _ModeButton(
                     label: l.networkModeWired,
                     active: !net.wifiEnabled,
+                    focusNode: _wiredFocus,
                     onTap: () => _onModeChanged(false),
                   ),
                 ],
@@ -290,11 +328,13 @@ class _ModeButton extends StatefulWidget {
     required this.active,
     this.onTap,
     this.autofocus = false,
+    this.focusNode,
   });
   final String label;
   final bool active;
   final VoidCallback? onTap;
   final bool autofocus;
+  final FocusNode? focusNode;
 
   @override
   State<_ModeButton> createState() => _ModeButtonState();
@@ -309,6 +349,7 @@ class _ModeButtonState extends State<_ModeButton> {
       color: Colors.transparent,
       child: InkWell(
         autofocus: widget.autofocus,
+        focusNode: widget.focusNode,
         onFocusChange: (f) => setState(() => _focused = f),
         borderRadius: BorderRadius.circular(10),
         onTap: widget.onTap,

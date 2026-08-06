@@ -9,14 +9,25 @@ import 'package:fndtv/src/core/services/stb_network_service.dart';
 class FakeNetworkService extends StbNetworkService {
   StbNetworkStatus next = StbNetworkStatus.fromMaps();
   List<WifiNetwork> scanResult = const [];
+
+  /// Successive scan results, consumed in order (to model a radio that needs a
+  /// moment before it reports anything); falls back to [scanResult].
+  List<List<WifiNetwork>>? scanSequence;
   bool connectResult = true;
+  int scanCalls = 0;
+  final wifiEnabledCalls = <bool>[];
   final connectCalls = <(String, String?)>[];
   final connectSecurity = <String?>[];
 
   @override
   Future<StbNetworkStatus> status() async => next;
   @override
-  Future<List<WifiNetwork>> scan() async => scanResult;
+  Future<List<WifiNetwork>> scan() async {
+    scanCalls++;
+    final seq = scanSequence;
+    if (seq != null && seq.isNotEmpty) return seq.removeAt(0);
+    return scanResult;
+  }
   @override
   Future<bool> connect(String ssid, {String? password, String? security}) async {
     connectCalls.add((ssid, password));
@@ -25,7 +36,10 @@ class FakeNetworkService extends StbNetworkService {
   }
 
   @override
-  Future<bool> setWifiEnabled(bool enabled) async => true;
+  Future<bool> setWifiEnabled(bool enabled) async {
+    wifiEnabledCalls.add(enabled);
+    return true;
+  }
 }
 
 /// A status() call that only resolves once [release] completes, so a test can
@@ -146,5 +160,80 @@ void main() {
 
     await expectLater(closeFuture, completes);
     await changes.close();
+  });
+
+  // ── Bug: moving to Wi-Fi must show the available networks ────────────────
+
+  test('switching to Wi-Fi scans, so the network list is populated', () async {
+    final svc = FakeNetworkService()
+      ..scanResult = const [WifiNetwork(ssid: 'A', secured: true, level: 3)];
+    final cubit = make(svc);
+    await cubit.setUseWifi(true);
+    expect(svc.wifiEnabledCalls, [true]);
+    expect(svc.scanCalls, greaterThanOrEqualTo(1));
+    expect(cubit.state.networks.single.ssid, 'A');
+    await cubit.close();
+  });
+
+  test('switching to wired does not scan', () async {
+    final svc = FakeNetworkService();
+    final cubit = make(svc);
+    await cubit.setUseWifi(false);
+    expect(svc.wifiEnabledCalls, [false]);
+    expect(svc.scanCalls, 0);
+    await cubit.close();
+  });
+
+  test('scan retries while the radio has not produced results yet', () async {
+    final svc = FakeNetworkService()
+      ..scanSequence = [
+        const [],
+        const [WifiNetwork(ssid: 'Late', secured: false, level: 2)],
+      ];
+    final cubit = make(svc);
+    await cubit.scan(retries: 2, retryDelay: const Duration(milliseconds: 5));
+    expect(svc.scanCalls, 2);
+    expect(cubit.state.networks.single.ssid, 'Late');
+    expect(cubit.state.scanning, isFalse);
+    await cubit.close();
+  });
+
+  // ── Bug: rebooted with no cable must not stay stranded on wired ──────────
+
+  test('ensureBootConnectivity enables Wi-Fi when no cable and radio is off',
+      () async {
+    final svc = FakeNetworkService()
+      ..next = StbNetworkStatus.fromMaps(
+        wifi: {'enabled': false},
+        ethernet: {'linked': false},
+      );
+    final cubit = make(svc);
+    expect(await cubit.ensureBootConnectivity(), isTrue);
+    expect(svc.wifiEnabledCalls, [true]);
+    await cubit.close();
+  });
+
+  test('ensureBootConnectivity leaves a linked wired box alone', () async {
+    final svc = FakeNetworkService()
+      ..next = StbNetworkStatus.fromMaps(
+        wifi: {'enabled': false},
+        ethernet: {'linked': true, 'ip': '10.0.0.3'},
+      );
+    final cubit = make(svc);
+    expect(await cubit.ensureBootConnectivity(), isFalse);
+    expect(svc.wifiEnabledCalls, isEmpty);
+    await cubit.close();
+  });
+
+  test('ensureBootConnectivity is a no-op when Wi-Fi is already on', () async {
+    final svc = FakeNetworkService()
+      ..next = StbNetworkStatus.fromMaps(
+        wifi: {'enabled': true, 'ssid': 'Home', 'ip': '10.0.0.2'},
+        ethernet: {'linked': false},
+      );
+    final cubit = make(svc);
+    expect(await cubit.ensureBootConnectivity(), isFalse);
+    expect(svc.wifiEnabledCalls, isEmpty);
+    await cubit.close();
   });
 }
