@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fndtv/src/bloc/content_cubit/content_cubit.dart';
 import 'package:app_localization/app_localization.dart';
 import 'package:fndtv/src/core/constants/fndtv_channels.dart';
+import 'package:fndtv/src/core/constants/stb_radio_policy.dart';
 import 'package:fndtv/src/ui/widgets/channel/channel_tiles.dart';
 import 'package:fndtv/src/ui/widgets/tv/tv_widgets.dart';
 import 'package:ui_kit/ui_kit.dart';
@@ -33,8 +34,31 @@ class TvHomePage extends StatelessWidget {
               channelsForLanguage(state.contentList?['8']?.data, language);
           final mainLive = live.where((m) => !m.isTimeShift).toList();
           final timeShift = live.where((m) => m.isTimeShift).toList();
-          final radio =
-              channelsForLanguage(state.contentList?['10']?.data, language);
+          // Spanish radio is hidden outright on the box, which also drops the
+          // whole Radio section from Home for that locale — see
+          // stb_radio_policy.
+          final radio = visibleRadioChannels(
+            channelsForLanguage(state.contentList?['10']?.data, language),
+          );
+
+          // A partial backend failure (one content type errors while the others
+          // succeed) still reports Status.success, so we can land here with
+          // nothing to show. Every section below is conditional, which would
+          // otherwise leave the Column childless — a blank screen the user
+          // can't distinguish from a hang. Say so instead.
+          if (mainLive.isEmpty && timeShift.isEmpty && radio.isEmpty) {
+            return ContentUnavailable(
+              colors: colors,
+              // TV paints on kTvBg (near-black); the UiKit palette's dark text
+              // would be invisible there.
+              titleColor: Colors.white,
+              bodyColor: Colors.white70,
+              iconColor: Colors.white38,
+              onRetry: () => context
+                  .read<ContentCubit>()
+                  .getContentForMultipleTypes([8, 10, 17]),
+            );
+          }
 
           return FocusTraversalGroup(
             policy: ReadingOrderTraversalPolicy(),
@@ -57,11 +81,13 @@ class TvHomePage extends StatelessWidget {
                     const SizedBox(height: 8),
                   ],
                   if (timeShift.isNotEmpty) ...[
-                    TvSectionHeader(l.sectionChicagoTime),
+                    // The US feed is presented as live too — same heading and
+                    // badge as the Europe row (was "Chicago time" / "US TIME").
+                    TvSectionHeader(l.sectionLiveNow),
                     Expanded(
                       child: TvChannelRow(
                         channel: timeShift.first,
-                        badge: l.badgeUsTime,
+                        badge: l.badgeLive,
                         onTap: () => openLiveDetail(context, timeShift.first,
                             contentType: ContentType.television),
                       ),
@@ -73,9 +99,13 @@ class TvHomePage extends StatelessWidget {
                     Expanded(
                       child: TvChannelRow(
                         channel: radio.first,
-                        badge: l.badgeOnAir,
-                        onTap: () => openLiveDetail(context, radio.first,
-                            contentType: ContentType.radio),
+                        badge: isRadioComingSoon(radio.first)
+                            ? l.radioComingSoon
+                            : l.badgeOnAir,
+                        onTap: () => isRadioComingSoon(radio.first)
+                            ? RadioComingSoonPage.open(context, radio.first)
+                            : openLiveDetail(context, radio.first,
+                                contentType: ContentType.radio),
                       ),
                     ),
                   ],

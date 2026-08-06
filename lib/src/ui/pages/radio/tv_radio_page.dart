@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:app_localization/app_localization.dart';
 import 'package:fndtv/src/bloc/content_cubit/content_cubit.dart';
 import 'package:fndtv/src/core/constants/fndtv_channels.dart';
+import 'package:fndtv/src/core/constants/stb_radio_policy.dart';
 import 'package:fndtv/src/ui/widgets/channel/channel_tiles.dart';
 import 'package:fndtv/src/ui/widgets/tv/tv_widgets.dart';
 import 'package:ui_kit/ui_kit.dart';
@@ -30,8 +31,10 @@ class TvRadioPage extends StatelessWidget {
             return ContentError(colors: colors);
           }
 
-          final radios =
-              channelsForLanguage(state.contentList?['10']?.data, language);
+          // Spanish radio is hidden outright on the box — see stb_radio_policy.
+          final radios = visibleRadioChannels(
+            channelsForLanguage(state.contentList?['10']?.data, language),
+          );
           if (radios.isEmpty) {
             return Center(
               child: Text(
@@ -53,10 +56,15 @@ class TvRadioPage extends StatelessWidget {
                     Expanded(
                       child: TvChannelRow(
                         channel: channel,
-                        badge: l.badgeOnAir,
+                        // Not on air — nothing is broadcasting yet.
+                        badge: isRadioComingSoon(channel)
+                            ? l.radioComingSoon
+                            : l.badgeOnAir,
                         autofocus: channel == radios.first,
-                        onTap: () => openLiveDetail(context, channel,
-                            contentType: ContentType.radio),
+                        onTap: () => isRadioComingSoon(channel)
+                            ? RadioComingSoonPage.open(context, channel)
+                            : openLiveDetail(context, channel,
+                                contentType: ContentType.radio),
                       ),
                     ),
                 ],

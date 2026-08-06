@@ -12,6 +12,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:fndtv/src/bloc/content_cubit/content_cubit.dart';
 import 'package:fndtv/src/bloc/network_cubit/network_cubit.dart';
 import 'package:fndtv/src/core/constants/fndtv_channels.dart';
+import 'package:fndtv/src/core/constants/stb_radio_policy.dart';
 import 'package:fndtv/src/ui/pages/home/new_home_page.dart';
 import 'package:fndtv/src/ui/pages/live/new_live_page.dart';
 import 'package:fndtv/src/ui/pages/on_demand/new_on_demand_page.dart';
@@ -19,6 +20,7 @@ import 'package:fndtv/src/ui/pages/radio/new_radio_page.dart';
 import 'package:fndtv/src/ui/pages/about/new_about_page.dart';
 import 'package:fndtv/src/ui/pages/updates/tv_updates_page.dart';
 import 'package:fndtv/src/ui/pages/network/tv_network_page.dart';
+import 'package:fndtv/src/ui/pages/settings/tv_settings_page.dart';
 import 'package:fndtv/src/ui/pages/settings/settings_page.dart';
 import 'package:app_localization/app_localization.dart';
 import 'package:fndtv/src/core/services/stb_system_service.dart';
@@ -49,6 +51,16 @@ extension _MainTabX on _MainTab {
         _MainTab.about => '',
       };
 
+  /// Nav-rail icon. Lives with the tab so the rail can be built by iterating
+  /// whichever tabs are visible, instead of a hand-indexed list.
+  IconData get navIcon => switch (this) {
+        _MainTab.home => Icons.home_rounded,
+        _MainTab.live => Icons.podcasts_rounded,
+        _MainTab.onDemand => Icons.ondemand_video_rounded,
+        _MainTab.radio => Icons.mic_rounded,
+        _MainTab.about => Icons.info_rounded,
+      };
+
   Widget buildPage(FndtvLanguage language) => switch (this) {
         _MainTab.home => NewHomePage(language: language),
         _MainTab.live => NewLivePage(language: language),
@@ -73,7 +85,6 @@ class MainContainerPage extends StatefulWidget {
 class _MainContainerPageState extends State<MainContainerPage> {
   static const _appBarColor = Color(0xFFA83734);
 
-  final _tabs = _MainTab.values;
   int _currentIndex = 0;
   late PageController _pageController;
 
@@ -127,28 +138,40 @@ class _MainContainerPageState extends State<MainContainerPage> {
     );
   }
 
-  /// The TV nav rail's last items are the language switcher and the updates
-  /// check — selecting either opens a popup over the current screen instead of
-  /// switching pages. They sit after the five tabs (home, live, on demand,
-  /// radio, about).
-  static const int _kLanguageNavIndex = 5;
-  static const int _kUpdatesNavIndex = 6;
+  /// Content tabs offered for [language].
+  ///
+  /// Radio is dropped entirely where the language has none — Spanish today. The
+  /// client asked for "no mention of it", and a Radio tab whose only content is
+  /// "no radio channel available" is both a mention and reads as a fault. See
+  /// [isRadioAvailableForLanguage].
+  List<_MainTab> _visibleTabs(FndtvLanguage language) =>
+      isRadioAvailableForLanguage(language)
+          ? _MainTab.values
+          : _MainTab.values.where((t) => t != _MainTab.radio).toList();
 
-  /// STB only — the in-app network manager (kiosk boxes can't reach Android
-  /// Settings). Sits last, so its absence on other flavors shifts nothing.
-  static const int _kNetworkNavIndex = 7;
+  // The action items (language, updates, network, settings) sit AFTER the
+  // content tabs, so their indices are derived from however many tabs are
+  // showing rather than hardcoded — dropping Radio shifts every one of them.
+  int _languageNavIndex(int tabCount) => tabCount;
+  int _updatesNavIndex(int tabCount) => tabCount + 1;
+  int _networkNavIndex(int tabCount) => tabCount + 2;
+  int _settingsNavIndex(int tabCount) => tabCount + 3;
 
-  void _onNavSelected(int index) {
-    if (index == _kLanguageNavIndex) {
+  void _onNavSelected(int index, int tabCount) {
+    if (index == _languageNavIndex(tabCount)) {
       _openTvLanguageDialog();
       return;
     }
-    if (index == _kUpdatesNavIndex) {
+    if (index == _updatesNavIndex(tabCount)) {
       _openUpdatesPage();
       return;
     }
-    if (index == _kNetworkNavIndex) {
+    if (index == _networkNavIndex(tabCount)) {
       _selectNetwork();
+      return;
+    }
+    if (index == _settingsNavIndex(tabCount)) {
+      _openSettingsPage();
       return;
     }
     // A real content tab — leave the inline network view if it was showing.
@@ -174,6 +197,15 @@ class _MainContainerPageState extends State<MainContainerPage> {
   Future<void> _openUpdatesPage() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(builder: (_) => const TvUpdatesPage()),
+    );
+    if (mounted) _scaffoldKey.currentState?.requestNavFocus();
+  }
+
+  /// Box settings — a full-screen pushed page; focus returns to the nav rail
+  /// once it closes, like Updates and Network.
+  Future<void> _openSettingsPage() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => const TvSettingsPage()),
     );
     if (mounted) _scaffoldKey.currentState?.requestNavFocus();
   }
@@ -212,6 +244,7 @@ class _MainContainerPageState extends State<MainContainerPage> {
     BuildContext context,
     _MainTab currentTab,
     FndtvLanguage selectedLanguage,
+    List<_MainTab> tabs,
   ) {
     return Column(
       children: [
@@ -284,10 +317,10 @@ class _MainContainerPageState extends State<MainContainerPage> {
             controller: _pageController,
             onPageChanged: _onPageChanged,
             physics: const BouncingScrollPhysics(),
-            itemCount: _tabs.length,
+            itemCount: tabs.length,
             itemBuilder: (context, index) => Padding(
               padding: context.isTv ? EdgeInsets.zero : const EdgeInsets.all(8.0),
-              child: _tabs[index].buildPage(selectedLanguage),
+              child: tabs[index].buildPage(selectedLanguage),
             ),
           ),
         ),
@@ -302,7 +335,20 @@ class _MainContainerPageState extends State<MainContainerPage> {
     final selectedLanguage = FndtvLanguage.fromLocaleCode(
       context.watch<LocalizationCubit>().state.locale.languageCode,
     );
-    final currentTab = _tabs[_currentIndex];
+
+    // Switching to a language with fewer tabs (Spanish loses Radio) can leave
+    // the cursor past the end — clamp before indexing, and pull the PageView
+    // back in step after this frame.
+    final tabs = _visibleTabs(selectedLanguage);
+    if (_currentIndex >= tabs.length) {
+      _currentIndex = tabs.length - 1;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _pageController.hasClients) {
+          _pageController.jumpToPage(_currentIndex);
+        }
+      });
+    }
+    final currentTab = tabs[_currentIndex];
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
         value: const SystemUiOverlayStyle(
@@ -314,18 +360,13 @@ class _MainContainerPageState extends State<MainContainerPage> {
             ? AppScaffold(
                 key: _scaffoldKey,
                 color: kTvBg,
-                currentNavIndex:
-                    _networkTabActive ? _kNetworkNavIndex : _currentIndex,
-                onNavChanged: _onNavSelected,
+                currentNavIndex: _networkTabActive
+                    ? _networkNavIndex(tabs.length)
+                    : _currentIndex,
+                onNavChanged: (i) => _onNavSelected(i, tabs.length),
                 navigationItems: [
-                  (label: _tabs[0].title(context), icon: Icons.home_rounded),
-                  (label: _tabs[1].title(context), icon: Icons.podcasts_rounded),
-                  (
-                    label: _tabs[2].title(context),
-                    icon: Icons.ondemand_video_rounded
-                  ),
-                  (label: _tabs[3].title(context), icon: Icons.mic_rounded),
-                  (label: _tabs[4].title(context), icon: Icons.info_rounded),
+                  for (final tab in tabs)
+                    (label: tab.title(context), icon: tab.navIcon),
                   // Language switcher — shows the active language, opens a popup.
                   (label: selectedLanguage.endonym, icon: Icons.language_rounded),
                   // Software update check — opens a popup.
@@ -337,14 +378,20 @@ class _MainContainerPageState extends State<MainContainerPage> {
                   // full-screen when offline.
                   if (StbSystemService.isStb)
                     (label: context.l.navNetwork, icon: Icons.wifi_rounded),
+                  // STB: box settings — sits directly below Network.
+                  if (StbSystemService.isStb)
+                    (
+                      label: context.l.navSettings,
+                      icon: Icons.settings_rounded
+                    ),
                 ],
                 body: _networkTabActive
                     ? const TvNetworkView(autofocusOnEnter: false)
-                    : _buildBody(context, currentTab, selectedLanguage),
+                    : _buildBody(context, currentTab, selectedLanguage, tabs),
                 hasNavbar: true,
               )
             : Scaffold(
-                body: _buildBody(context, currentTab, selectedLanguage),
+                body: _buildBody(context, currentTab, selectedLanguage, tabs),
                 bottomNavigationBar: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
