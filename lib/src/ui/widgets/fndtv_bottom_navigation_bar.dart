@@ -1,22 +1,29 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:app_localization/app_localization.dart';
 import 'package:ui_kit/ui_kit.dart';
+
+/// One entry in the bottom bar.
+typedef FndtvNavItem = ({IconData icon, String label});
 
 class FNDTVBottomNavigationBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
+  /// Supplied by the caller rather than hardcoded here: the Radio tab is
+  /// dropped for languages that have no radio, which shifts every index after
+  /// it.
+  final List<FndtvNavItem> items;
+
   const FNDTVBottomNavigationBar({
     super.key,
     required this.currentIndex,
     required this.onTap,
+    required this.items,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = context.uiKitColors;
-    final l = context.l;
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Container(
@@ -32,36 +39,13 @@ class FNDTVBottomNavigationBar extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _NavItem(
-              icon: Icons.home_rounded,
-              label: l.navHome,
-              isActive: currentIndex == 0,
-              onTap: () => onTap(0),
-            ),
-            _NavItem(
-              icon: Icons.podcasts_rounded,
-              label: l.navLive,
-              isActive: currentIndex == 1,
-              onTap: () => onTap(1),
-            ),
-            _NavItem(
-              icon: Icons.ondemand_video_rounded,
-              label: l.navOnDemand,
-              isActive: currentIndex == 2,
-              onTap: () => onTap(2),
-            ),
-            _NavItem(
-              icon: Icons.mic_rounded,
-              label: l.navRadio,
-              isActive: currentIndex == 3,
-              onTap: () => onTap(3),
-            ),
-            _NavItem(
-              icon: Icons.info_rounded,
-              label: l.navAbout,
-              isActive: currentIndex == 4,
-              onTap: () => onTap(4),
-            ),
+            for (var i = 0; i < items.length; i++)
+              _NavItem(
+                icon: items[i].icon,
+                label: items[i].label,
+                isActive: currentIndex == i,
+                onTap: () => onTap(i),
+              ),
           ],
         ),
       ),

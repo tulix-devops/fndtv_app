@@ -1,4 +1,5 @@
 ﻿import 'package:country_flags/country_flags.dart';
+import 'package:fndtv/src/core/constants/radio_policy.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -72,32 +73,78 @@ class _MainContainerPageState extends State<MainContainerPage> {
   @override
   Widget build(BuildContext context) {
     final l = context.l;
-    final tabTitles = [
-      l.tabTitleHome,
-      l.tabTitleLive,
-      l.tabTitleOnDemand,
-      l.tabTitleRadio,
-      l.tabTitleAbout,
-    ];
-    final tabSubtitles = [
-      l.tabSubtitleHome,
-      l.tabSubtitleLive,
-      l.tabSubtitleOnDemand,
-      l.tabSubtitleRadio,
-      '',
-    ];
     // Language drives both the UI locale and the channel-language filter; derive
     // it from the LocalizationCubit so a persisted locale stays in sync.
     final selectedLanguage = FndtvLanguage.fromLocaleCode(
       context.watch<LocalizationCubit>().state.locale.languageCode,
     );
-    final pages = [
-      NewHomePage(language: selectedLanguage),
-      NewLivePage(language: selectedLanguage),
-      NewOnDemandPage(language: selectedLanguage),
-      NewRadioPage(language: selectedLanguage),
-      NewAboutPage(language: selectedLanguage),
+
+    // One list instead of three parallel ones, because Radio is dropped
+    // entirely for languages that have none — Spanish today — and that shifts
+    // every index after it. The client asked for "no mention of it", and a
+    // Radio tab whose only content is "no radio channel available" is both a
+    // mention and reads as a fault. See [isRadioAvailableForLanguage].
+    final tabs = <({
+      String title,
+      String subtitle,
+      String navLabel,
+      IconData icon,
+      Widget page,
+      bool isAbout,
+    })>[
+      (
+        title: l.tabTitleHome,
+        subtitle: l.tabSubtitleHome,
+        navLabel: l.navHome,
+        icon: Icons.home_rounded,
+        page: NewHomePage(language: selectedLanguage),
+        isAbout: false,
+      ),
+      (
+        title: l.tabTitleLive,
+        subtitle: l.tabSubtitleLive,
+        navLabel: l.navLive,
+        icon: Icons.podcasts_rounded,
+        page: NewLivePage(language: selectedLanguage),
+        isAbout: false,
+      ),
+      (
+        title: l.tabTitleOnDemand,
+        subtitle: l.tabSubtitleOnDemand,
+        navLabel: l.navOnDemand,
+        icon: Icons.ondemand_video_rounded,
+        page: NewOnDemandPage(language: selectedLanguage),
+        isAbout: false,
+      ),
+      if (isRadioAvailableForLanguage(selectedLanguage))
+        (
+          title: l.tabTitleRadio,
+          subtitle: l.tabSubtitleRadio,
+          navLabel: l.navRadio,
+          icon: Icons.mic_rounded,
+          page: NewRadioPage(language: selectedLanguage),
+          isAbout: false,
+        ),
+      (
+        title: l.tabTitleAbout,
+        subtitle: '',
+        navLabel: l.navAbout,
+        icon: Icons.info_rounded,
+        page: NewAboutPage(language: selectedLanguage),
+        isAbout: true,
+      ),
     ];
+
+    // Switching to a language with fewer tabs can leave the cursor past the end
+    // — clamp before indexing and pull the PageView back in step.
+    if (_currentIndex >= tabs.length) {
+      _currentIndex = tabs.length - 1;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _pageController.hasClients) {
+          _pageController.jumpToPage(_currentIndex);
+        }
+      });
+    }
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Color(0xFFA83734), // red strip (non-edge-to-edge fallback)
@@ -126,7 +173,7 @@ class _MainContainerPageState extends State<MainContainerPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          tabTitles[_currentIndex],
+                          tabs[_currentIndex].title,
                           style: GoogleFonts.sora(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
@@ -134,9 +181,9 @@ class _MainContainerPageState extends State<MainContainerPage> {
                             letterSpacing: 1.2,
                           ),
                         ),
-                        if (tabSubtitles[_currentIndex].isNotEmpty)
+                        if (tabs[_currentIndex].subtitle.isNotEmpty)
                           Text(
-                            tabSubtitles[_currentIndex],
+                            tabs[_currentIndex].subtitle,
                             style: GoogleFonts.sora(
                               fontSize: 10,
                               fontWeight: FontWeight.w400,
@@ -154,7 +201,7 @@ class _MainContainerPageState extends State<MainContainerPage> {
                         context.read<LocalizationCubit>().setLocale(lang.localeCode),
                   ),
                   // Settings button on About tab (now index 4 after On Demand)
-                  if (_currentIndex == 4) ...[
+                  if (tabs[_currentIndex].isAbout) ...[
                     const SizedBox(width: 4),
                     IconButton(
                       icon: const Icon(Icons.settings, color: Colors.white, size: 26),
@@ -170,7 +217,7 @@ class _MainContainerPageState extends State<MainContainerPage> {
               controller: _pageController,
               onPageChanged: _onPageChanged,
               physics: const BouncingScrollPhysics(),
-              children: pages,
+              children: [for (final t in tabs) t.page],
             ),
           ),
         ],
@@ -183,6 +230,9 @@ class _MainContainerPageState extends State<MainContainerPage> {
           FNDTVBottomNavigationBar(
             currentIndex: _currentIndex,
             onTap: _onTabTapped,
+            items: [
+              for (final t in tabs) (icon: t.icon, label: t.navLabel),
+            ],
           ),
         ],
       ),
