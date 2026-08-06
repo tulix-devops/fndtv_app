@@ -14,6 +14,25 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// The `stb` RELEASE apk ships a single ABI. Without this it carries three
+// (arm64-v8a + armeabi-v7a + x86_64) and libmpv.so alone is ~12 MB per ABI, so
+// the apk lands at ~113 MB instead of ~47 MB. `--target-platform android-arm64`
+// does NOT fix this: it only filters Flutter's own libflutter/libapp, while
+// libmpv comes from the media_kit AAR and ships every ABI regardless.
+//
+// Why not `flutter build apk --split-per-abi`? That works, but Flutter offsets
+// versionCode per ABI (arm64 -> 2005 instead of 5). With the in-app OTA
+// updater (`/api/app-version/{id}/apk`) that is a trap: once a box is on 2005,
+// a later non-split apk reads as a DOWNGRADE and Android refuses to install it.
+// Filtering here keeps versionCode exactly what pubspec says.
+//
+// Scoped to stbRelease on purpose — stbDebug keeps every ABI so the x86_64
+// Android TV emulator still works, and the `normal` (mobile) flavor keeps
+// armeabi-v7a for older phones.
+val isStbRelease = gradle.startParameter.taskNames.any {
+    it.contains("stbRelease", ignoreCase = true)
+}
+
 android {
     namespace = "com.fndtv.videoplayer"
     compileSdk = 35  // Latest Android API level (Android 15)
@@ -78,6 +97,36 @@ android {
             dimension = "target"
             // Same applicationId + signing as normal, so device registration and
             // release signing carry over unchanged.
+            //
+            // RK3528/RK3328 boxes are arm64 Cortex-A53. See [isStbRelease] above
+            // for why the filter lives here and not in `--target-platform`.
+            if (isStbRelease) {
+                ndk {
+                    abiFilters.clear()
+                    abiFilters += setOf("arm64-v8a", "armeabi-v7a")
+                }
+            }
+        }
+    }
+
+    // `ndk.abiFilters` above only covers libs this module builds — it does NOT
+    // strip prebuilt .so files that arrive inside an AAR, which is exactly where
+    // the big one lives (libmpv.so, ~12 MB per ABI, from media_kit_libs_android_
+    // video). Excluding them at packaging time is what actually drops the apk
+    // from ~113 MB to ~47 MB.
+    if (isStbRelease) {
+        packaging {
+            jniLibs {
+                // Both ARM ABIs stay: we have not confirmed whether every box in
+                // the field runs a 64-bit userspace, and an arm64-only apk fails
+                // outright (INSTALL_FAILED_NO_MATCHING_ABIS) on a 32-bit one.
+                // Only the x86 pair goes — no set-top box is Intel, and it is
+                // the single largest ABI (~37 MB).
+                excludes += setOf(
+                    "**/x86/**",
+                    "**/x86_64/**",
+                )
+            }
         }
     }
 }
