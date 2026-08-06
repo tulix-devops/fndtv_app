@@ -51,6 +51,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get navOnDemand => 'Bajo demanda';
 
   @override
+  String get radioComingSoon => 'Próximamente';
+
+  @override
+  String get radioComingSoonTitle => 'La radio llegará pronto';
+
+  @override
+  String get radioComingSoonBody =>
+      'Estamos preparando la programación de radio. Aparecerá aquí en cuanto esté lista.';
+
+  @override
   String get navRadio => 'Radio';
 
   @override
