@@ -1,3 +1,4 @@
+import 'package:fndtv/src/core/constants/radio_policy.dart';
 import 'package:commons/commons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -31,7 +32,9 @@ class NewRadioPage extends StatelessWidget {
             return ContentError(colors: colors);
           }
 
-          final radios = channelsForLanguage(state.contentList?['10']?.data, language);
+          // Spanish radio is hidden outright — see radio_policy.
+          final radios = visibleRadioChannels(
+              channelsForLanguage(state.contentList?['10']?.data, language));
           if (radios.isEmpty) {
             return Center(
               child: Text(
@@ -50,7 +53,12 @@ class NewRadioPage extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    StatusPill(text: context.l.badgeOnAir, icon: Icons.circle),
+                    StatusPill(
+                      text: isRadioComingSoon(channel)
+                          ? context.l.radioComingSoon
+                          : context.l.badgeOnAir,
+                      icon: Icons.circle,
+                    ),
                     const SizedBox(height: 28),
 
                     // Banner artwork
@@ -151,7 +159,9 @@ class _RadioPlayButton extends StatelessWidget {
             }
 
             return GestureDetector(
-              onTap: () => isCurrent ? service.toggle() : service.play(channel),
+              onTap: () => isRadioComingSoon(channel)
+                  ? RadioComingSoonSheet.show(context, channel)
+                  : (isCurrent ? service.toggle() : service.play(channel)),
               child: RoundedPlayButton(
                 size: 76,
                 filled: true,

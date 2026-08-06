@@ -1,3 +1,4 @@
+import 'package:fndtv/src/core/constants/radio_policy.dart';
 import 'package:commons/commons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -31,7 +32,10 @@ class NewHomePage extends StatelessWidget {
           final live = channelsForLanguage(state.contentList?['8']?.data, language);
           final mainLive = live.where((m) => !m.isTimeShift).toList();
           final timeShift = live.where((m) => m.isTimeShift).toList();
-          final radio = channelsForLanguage(state.contentList?['10']?.data, language);
+          // Spanish radio is hidden outright, which also drops the whole Radio
+          // section from Home for that locale — see radio_policy.
+          final radio = visibleRadioChannels(
+              channelsForLanguage(state.contentList?['10']?.data, language));
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),

@@ -1,3 +1,4 @@
+import 'package:fndtv/src/core/constants/radio_policy.dart';
 import 'dart:math' as math;
 
 import 'package:commons/commons.dart';
@@ -261,8 +262,14 @@ class RadioRowCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.uiKitColors;
 
+    // Radio has not launched — see radio_policy. The card stays exactly where it
+    // is so the entry point is already in place, but it must not start audio.
+    final comingSoon = isRadioComingSoon(channel);
+
     return GestureDetector(
-      onTap: () => RadioPlayerService.instance.play(channel),
+      onTap: () => comingSoon
+          ? RadioComingSoonSheet.show(context, channel)
+          : RadioPlayerService.instance.play(channel),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -297,7 +304,18 @@ class RadioRowCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 8),
-                  EqualizerBars(color: colors.accent, height: 14, bars: 5),
+                  // Equalizer bars imply "on air" — wrong while nothing plays.
+                  if (comingSoon)
+                    Text(
+                      context.l.radioComingSoon,
+                      style: GoogleFonts.sora(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: colors.textMuted,
+                      ),
+                    )
+                  else
+                    EqualizerBars(color: colors.accent, height: 14, bars: 5),
                 ],
               ),
             ),
