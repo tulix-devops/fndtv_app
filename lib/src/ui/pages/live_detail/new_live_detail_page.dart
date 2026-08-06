@@ -29,31 +29,15 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
   bool _loading = true;
   bool _error = false;
   bool _isGrid = false;
-  DateTime _selectedDate = DateTime.now();
+  // Fixed at page open: the schedule always covers the current day (the
+  // backend ignores the date parameter), so nothing can change this.
+  final DateTime _selectedDate = DateTime.now();
   List<LiveModel> _programs = const [];
 
   @override
   void initState() {
     super.initState();
     _fetchSchedule();
-  }
-
-  Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: now.subtract(const Duration(days: 14)),
-      lastDate: now.add(const Duration(days: 14)),
-    );
-    if (picked != null && mounted) {
-      setState(() {
-        _selectedDate = picked;
-        _loading = true;
-        _error = false;
-      });
-      _fetchSchedule();
-    }
   }
 
   Future<void> _fetchSchedule() async {
@@ -184,11 +168,7 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
                     colors: colors,
                   ),
                   const SizedBox(width: 10),
-                  _DateChip(
-                    date: _selectedDate,
-                    onTap: _pickDate,
-                    colors: colors,
-                  ),
+                  _DateChip(date: _selectedDate, colors: colors),
                 ],
               ),
             ),
@@ -249,7 +229,10 @@ class _NewLiveDetailPageState extends State<NewLiveDetailPage> {
           crossAxisCount: 2,
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
-          childAspectRatio: 0.82,
+          // Sized to thumbnail + time + three title lines. At 0.82 the cards
+          // were tall enough for five, so every one ended in a block of empty
+          // space.
+          childAspectRatio: 0.95,
         ),
         itemCount: _programs.length,
         itemBuilder: (context, i) =>
@@ -329,38 +312,37 @@ class _ViewToggle extends StatelessWidget {
 // DATE CHIP
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Shows which day the schedule covers. Deliberately not tappable: the backend
+/// ignores the date parameter and always returns the current Paris calendar
+/// day, so a picker could only ever re-fetch the same list.
 class _DateChip extends StatelessWidget {
   final DateTime date;
-  final VoidCallback onTap;
   final UiKitColors colors;
 
-  const _DateChip({required this.date, required this.onTap, required this.colors});
+  const _DateChip({required this.date, required this.colors});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: colors.accent, width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              DateFormat('MMM d').format(date),
-              style: GoogleFonts.sora(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: colors.accent,
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.accent, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            DateFormat('MMM d').format(date),
+            style: GoogleFonts.sora(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: colors.accent,
             ),
-            const SizedBox(width: 6),
-            Icon(Icons.calendar_today_rounded, size: 14, color: colors.accent),
-          ],
-        ),
+          ),
+          const SizedBox(width: 6),
+          Icon(Icons.calendar_today_rounded, size: 14, color: colors.accent),
+        ],
       ),
     );
   }
@@ -480,70 +462,130 @@ class _DvrRow extends StatelessWidget {
     final start = _fmtTime(program.startsAt);
     final end = _fmtTime(program.endsAt);
 
-    final titleColor = isCurrent ? Colors.white : colors.textMuted;
+    final titleColor = isCurrent ? Colors.white : colors.textPrimary;
     final timeColor = isCurrent ? Colors.white : colors.accent;
-    final range = end.isEmpty ? start : '$start - $end';
+    final range = end.isEmpty ? start : '$start – $end';
 
     return Container(
-      height: 62,
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: isCurrent ? colors.accent : const Color(0xFFF6E3E3),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          width: 1,
-          color: isCurrent ? colors.accent : const Color(0xFFE2B6B6),
-        ),
-      ),
+      height: 78,
+      padding: const EdgeInsets.all(10),
+      decoration: _scheduleCardDecoration(colors, isCurrent),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: SizedBox(
-              width: 88,
-              height: 50,
-              child: hasThumb
-                  ? Image.network(
-                      thumb,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: colors.bgSurface,
-                        child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 22),
-                      ),
-                    )
-                  : Container(
-                      color: colors.bgSurface,
-                      child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 22),
-                    ),
-            ),
+          _ProgramThumb(
+            url: thumb,
+            hasThumb: hasThumb,
+            width: 104,
+            height: 58,
+            radius: 9,
+            iconSize: 22,
+            colors: colors,
           ),
-          const SizedBox(width: 10),
-          // Title (secondary — trimmed to a single line)
+          const SizedBox(width: 12),
+          // Time above the title rather than in a right-hand column: every row's
+          // time then starts at the same x (still scannable), and the title gets
+          // the whole remaining width instead of ~100px, which is what was
+          // truncating it to "Trip Around the World...".
           Expanded(
-            child: Text(
-              program.title,
-              style: GoogleFonts.sora(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w500,
-                color: titleColor,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (range.isNotEmpty)
+                  Text(
+                    range,
+                    style: GoogleFonts.sora(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: timeColor,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                const SizedBox(height: 4),
+                // Flexible, not a bare Text: the row height is fixed so the list
+                // scans evenly, and at a large system font scale two lines no
+                // longer fit — this drops to one and ellipsizes instead of
+                // overflowing.
+                Flexible(
+                  child: Text(
+                    program.title,
+                    style: GoogleFonts.sora(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                      height: 1.3,
+                      color: titleColor,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 10),
-          // Time range (primary — full range, prominent)
-          if (range.isNotEmpty)
-            Text(
-              range,
-              style: GoogleFonts.sora(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: timeColor,
-              ),
-            ),
         ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHARED SCHEDULE CARD PIECES
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Same recipe as every other card in the app (About, radio rows, guide chips):
+/// a neutral surface on the dark page plus a hairline border. The schedule used
+/// to be the one place with a light-pink fill, which is what made it stick out.
+BoxDecoration _scheduleCardDecoration(UiKitColors colors, bool isCurrent) {
+  return BoxDecoration(
+    color: isCurrent ? colors.accent : colors.bgCard,
+    borderRadius: BorderRadius.circular(14),
+    border: Border.all(
+      width: isCurrent ? 1 : 0.5,
+      color: isCurrent ? colors.accent : colors.border,
+    ),
+  );
+}
+
+class _ProgramThumb extends StatelessWidget {
+  final String url;
+  final bool hasThumb;
+  final double? width;
+  final double? height;
+  final double radius;
+  final double iconSize;
+  final UiKitColors colors;
+
+  const _ProgramThumb({
+    required this.url,
+    required this.hasThumb,
+    required this.radius,
+    required this.iconSize,
+    required this.colors,
+    this.width,
+    this.height,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // bgPrimary, not bgSurface: the card itself is bgCard, and bgSurface is the
+    // same value — the placeholder would be invisible against it.
+    Widget fallback() => Container(
+          color: colors.bgPrimary,
+          child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: iconSize),
+        );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: hasThumb
+            ? Image.network(
+                url,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => fallback(),
+              )
+            : fallback(),
       ),
     );
   }
@@ -566,41 +608,25 @@ class _DvrGridCard extends StatelessWidget {
     final hasThumb = thumb.isNotEmpty && thumb != defaultPosterImage;
     final start = _fmtTime(program.startsAt);
     final end = _fmtTime(program.endsAt);
-    final range = end.isEmpty ? start : '$start - $end';
+    final range = end.isEmpty ? start : '$start – $end';
 
     final titleColor = isCurrent ? Colors.white : colors.textPrimary;
     final timeColor = isCurrent ? Colors.white : colors.accent;
 
     return Container(
       padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: isCurrent ? colors.accent : const Color(0xFFF6E3E3),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          width: 1,
-          color: isCurrent ? colors.accent : const Color(0xFFE2B6B6),
-        ),
-      ),
+      decoration: _scheduleCardDecoration(colors, isCurrent),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: hasThumb
-                  ? Image.network(
-                      thumb,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: colors.bgSurface,
-                        child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 26),
-                      ),
-                    )
-                  : Container(
-                      color: colors.bgSurface,
-                      child: Icon(Icons.live_tv_rounded, color: colors.textMuted, size: 26),
-                    ),
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: _ProgramThumb(
+              url: thumb,
+              hasThumb: hasThumb,
+              radius: 10,
+              iconSize: 26,
+              colors: colors,
             ),
           ),
           const SizedBox(height: 8),
@@ -611,6 +637,7 @@ class _DvrGridCard extends StatelessWidget {
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: timeColor,
+                letterSpacing: 0.2,
               ),
             ),
           const SizedBox(height: 4),
@@ -618,9 +645,9 @@ class _DvrGridCard extends StatelessWidget {
             child: Text(
               program.title,
               style: GoogleFonts.sora(
-                fontSize: 11.5,
+                fontSize: 12,
                 fontWeight: FontWeight.w500,
-                height: 1.25,
+                height: 1.3,
                 color: titleColor,
               ),
               maxLines: 3,
