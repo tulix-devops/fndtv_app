@@ -42,6 +42,31 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
+        <!--
+          Force the Skia GL backend instead of Impeller.
+
+          The STB player embeds a real SurfaceView through a platform view in
+          TRUE hybrid composition, which merges Flutter's raster and platform
+          threads. On the Rockchip boxes that merge collides with Impeller's
+          GLES backend: the raster thread cannot acquire its own EGL context and
+          logs, continuously,
+            eglMakeCurrentImpl:1100 error 3002 (EGL_BAD_ACCESS)
+            impeller/toolkit/egl/egl.cc: EGL Error: Bad Access (12290)
+            gpu_surface_gl_impeller.cc: Could not make the context current
+          Flutter then renders NOTHING — video keeps showing because
+          SurfaceFlinger composites the SurfaceView independently, but every
+          control, spinner and overlay above it is frozen. Captured on the box
+          2026-08-03 17:05.
+
+          Skia's GL backend handles the merged-thread case that Impeller's does
+          not here. These boxes are also the weakest GPUs we ship to (RK3328 is
+          a GLES2-only Mali-450), which is the worst case for Impeller GLES
+          anyway. Revisit only with a box in hand to test on.
+        -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
+
         <!-- just_audio_background: media playback service + media-button receiver -->
         <service android:name="com.ryanheise.audioservice.AudioService"
             android:foregroundServiceType="mediaPlayback"
