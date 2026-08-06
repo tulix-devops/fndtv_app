@@ -10,7 +10,6 @@ final _defaultLogger = Logger(
     lineLength: 50,
     colors: io.stdout.supportsAnsiEscapes,
     printEmojis: true,
-  
   ),
 );
 
@@ -21,7 +20,28 @@ class AppLoggerImpl extends AppLogger {
 
   @override
   void log(Object message, LogLevel level, {StackTrace? stacktrace}) {
-    if (kReleaseMode) return;
+    if (kReleaseMode) {
+      // Release builds used to drop every log line, which made field logcats
+      // blind: the 2026-07-31 X88pro10 capture contained the app's raw print()
+      // calls but not one diagnostic (decoder profile, mpv tuning, stall
+      // watchdog…) — all of it muted here. The STB fleet runs release builds
+      // and QA debugging depends on those lines, so info+ now goes to logcat
+      // as plain single lines (PrettyPrinter's box-drawing stays debug-only —
+      // it is unreadable in logcat exports). debugPrint throttles output, so
+      // a burst cannot flood the kernel ring buffer.
+      switch (level) {
+        case LogLevel.verbose:
+        case LogLevel.debug:
+          return;
+        case LogLevel.info:
+        case LogLevel.warning:
+        case LogLevel.error:
+          debugPrint(
+            stacktrace == null ? '$message' : '$message\n$stacktrace',
+          );
+          return;
+      }
+    }
 
     switch (level) {
       case LogLevel.verbose:
