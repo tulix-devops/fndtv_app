@@ -13,6 +13,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:fndtv/src/index.dart';
 import 'package:fndtv/src/core/services/app_route_tracker.dart';
 import 'package:fndtv/src/ui/widgets/stb/stb_power_guard.dart';
+import 'package:fndtv/src/ui/widgets/stb_screen_size/stb_screen_size.dart';
 import 'package:fndtv/src/ui/widgets/stb/tv_kiosk_lock_overlay.dart';
 import 'package:fndtv/src/ui/widgets/stb/tv_offline_overlay.dart';
 import 'package:fndtv/src/ui/widgets/stb/tv_update_overlay.dart';
@@ -94,17 +95,34 @@ class _AppState extends State<App> {
                 // (TvClock) and the Network page, so there's no separate badge.
                 builder: StbSystemService.isStb
                     ? (context, child) => StbPowerGuard(
-                          child: Stack(
-                            children: [
-                              child ?? const SizedBox.shrink(),
-                              const TvOfflineOverlay(),
-                              // Progress while an MDM UPDATE_APP downloads/installs.
-                              const TvUpdateOverlay(),
-                              // Kiosk lock sits above everything, including the
-                              // offline overlay — a locked box stays blocked
-                              // whether or not it has internet.
-                              const TvKioskLockOverlay(),
-                            ],
+                          // Overscan compensation for the WHOLE app, not just
+                          // the video: many of these TVs crop every edge, and
+                          // the nav rail and clock sit right in the cropped
+                          // band. Wrapping here — above the Navigator — means
+                          // every route and every overlay shrinks together, so
+                          // nothing can end up half off-screen relative to the
+                          // rest. Shrink-only by construction
+                          // (StbScreenSize.max == 1.0), so this can never push
+                          // the nav rail out of reach.
+                          child: ValueListenableBuilder<StbScreenSize>(
+                            valueListenable: StbScreenSizeController.instance,
+                            builder: (context, screenSize, _) =>
+                                StbScreenSizeScaler(
+                              size: screenSize,
+                              child: Stack(
+                                children: [
+                                  child ?? const SizedBox.shrink(),
+                                  const TvOfflineOverlay(),
+                                  // Progress while an MDM UPDATE_APP
+                                  // downloads/installs.
+                                  const TvUpdateOverlay(),
+                                  // Kiosk lock sits above everything, including
+                                  // the offline overlay — a locked box stays
+                                  // blocked whether or not it has internet.
+                                  const TvKioskLockOverlay(),
+                                ],
+                              ),
+                            ),
                           ),
                         )
                     : null,
