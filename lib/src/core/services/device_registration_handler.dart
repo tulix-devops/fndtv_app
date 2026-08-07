@@ -40,6 +40,7 @@ class DeviceRegistrationHandler {
   /// Persisted unique debug MAC (see [_debugUniqueMac]).
   static const String _debugMacKey = 'stb_debug_mac';
 
+
   /// The anonymized MAC modern Android hands to apps without the privileged
   /// permission. It is the SAME for every device, so — like an empty value — it
   /// collides on the backend (which dedupes devices by MAC).
@@ -109,6 +110,7 @@ class DeviceRegistrationHandler {
         logger.w('[STB] No serial number available; skipping provisioning.');
         return;
       }
+      final deviceKey = await _identity.resolveDeviceKey(_storage);
 
       var macWifi = await _identity.getWifiMac();
       final osVersion = await _identity.getOsVersion();
@@ -126,13 +128,15 @@ class DeviceRegistrationHandler {
       }
 
       logger.i(
-        '[STB] Provisioning — serial: $serial, mac: $macWifi, model: $model, '
-        'os: $osVersion',
+        '[STB] Provisioning — key: $deviceKey (serial: $serial), '
+        'mac: $macWifi, model: $model, os: $osVersion',
       );
 
       final result = await _repo.provisionDevice(
-        serialNumber: serial,
+        // The composed key, not the raw serial — see [resolveDeviceKey].
+        serialNumber: deviceKey,
         macWifi: macWifi,
+        androidId: await _identity.getAndroidId(),
         model: model,
         osVersion: osVersion,
       );

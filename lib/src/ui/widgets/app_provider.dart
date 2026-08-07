@@ -201,7 +201,12 @@ class AppBlocProvider extends StatelessWidget {
             final storage = ctx.read<LocalStorage>();
             return DeviceIdentityCubit(
               readMac: identity.getWifiMac,
-              readSerial: identity.getSerialNumber,
+              // The composed identity, not the raw serial: it is what the box
+              // provisions under, so a technician reading it off the screen can
+              // match the box to its record. Computed on demand rather than
+              // read from storage, so it shows the right value on first boot
+              // too — provisioning may not have run yet when this loads.
+              readSerial: () => identity.resolveDeviceKey(storage),
               readDeviceId: () => storage.get<String>(kStbDeviceIdKey),
               readVersion: () async => (await PackageInfo.fromPlatform()).version,
             )..load();

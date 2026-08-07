@@ -26,6 +26,7 @@ class MainActivity : AudioServiceActivity() {
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "getSerialNumber" -> result.success(readSerialNumber())
+                "getAndroidId" -> result.success(readAndroidId())
                 "getWifiMac" -> result.success(readWifiMac())
                 "openDateSettings" -> result.success(openDateSettings())
                 "isDeviceOwner" -> result.success(ApkInstaller(this).isDeviceOwner())
@@ -84,6 +85,24 @@ class MainActivity : AudioServiceActivity() {
         if (isValid(Build.SERIAL)) return Build.SERIAL
 
         return null
+    }
+
+    // SSAID — the per-device id Android generates at first boot.
+    //
+    // Used to disambiguate boxes whose factory serial is NOT unique (batches of
+    // these boxes ship with the SoC vendor's default `ro.serialno`, so several
+    // report the same string and collapse onto one record on the backend).
+    //
+    // Chosen for its lifetime: it is scoped to our signing key and survives an
+    // app uninstall/reinstall or a "clear data", and resets only on a factory
+    // reset. App-local storage would not — Hive lives in app data, so a QA
+    // sideload would silently mint a new identity.
+    private fun readAndroidId(): String? = try {
+        val id = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+        if (isValid(id)) id else null
+    } catch (t: Throwable) {
+        android.util.Log.w("MainActivity", "android_id read failed", t)
+        null
     }
 
     // Best-effort read of the Wi-Fi hardware (MAC) address. On modern Android the
