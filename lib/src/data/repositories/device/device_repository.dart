@@ -28,6 +28,7 @@ abstract class DeviceRepository {
     String? androidId,
     String? macAddress,
     String? installedAppVersion,
+    String? installedVersionCode,
     String? deviceModel,
     String? osVersion,
   });
@@ -75,6 +76,7 @@ final class DeviceRepositoryImpl implements DeviceRepository {
     String? androidId,
     String? macAddress,
     String? installedAppVersion,
+    String? installedVersionCode,
     String? deviceModel,
     String? osVersion,
   }) {
@@ -83,6 +85,7 @@ final class DeviceRepositoryImpl implements DeviceRepository {
       androidId: androidId,
       macAddress: macAddress,
       installedAppVersion: installedAppVersion,
+      installedVersionCode: installedVersionCode,
       deviceModel: deviceModel,
       osVersion: osVersion,
     );

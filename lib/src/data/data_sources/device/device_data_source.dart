@@ -158,6 +158,7 @@ final class DeviceDataSource {
     String? androidId,
     String? macAddress,
     String? installedAppVersion,
+    String? installedVersionCode,
     String? deviceModel,
     String? osVersion,
   }) async {
@@ -176,6 +177,14 @@ final class DeviceDataSource {
             'mac_address': macAddress,
           if (installedAppVersion != null && installedAppVersion.isNotEmpty)
             'installed_app_version': installedAppVersion,
+          // versionCode, sent alongside the name because the name alone cannot
+          // identify a build: our release process holds versionName steady
+          // while the build increments, so 0.0.11+12 and 0.0.11+13 both report
+          // "0.0.11". It is also the only identifier Android guarantees to be
+          // monotonic. THE SERVER MUST COMPARE ON THIS for `update_required` to
+          // ever clear — sending it changes nothing on its own.
+          if (installedVersionCode != null && installedVersionCode.isNotEmpty)
+            'installed_version_code': installedVersionCode,
           if (deviceModel != null && deviceModel.isNotEmpty)
             'device_model': deviceModel,
           if (osVersion != null && osVersion.isNotEmpty)

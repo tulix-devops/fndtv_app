@@ -62,6 +62,7 @@ class _FakeRepo implements DeviceRepository {
     String? androidId,
     String? macAddress,
     String? installedAppVersion,
+    String? installedVersionCode,
     String? deviceModel,
     String? osVersion,
   }) async =>
@@ -107,10 +108,15 @@ class _FakeInstaller extends UpdateInstaller {
     return verifyResult;
   }
 
+  /// What the installer reports back. Defaults to the case a real box almost
+  /// never reaches — a successful self-install replaces the process first.
+  StbInstallOutcome installOutcome =
+      const StbInstallOutcome(StbInstallResult.success);
+
   @override
-  Future<bool> install(String path) async {
+  Future<StbInstallOutcome> install(String path) async {
     trace.events.add('install');
-    return true;
+    return installOutcome;
   }
 }
 

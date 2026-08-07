@@ -178,10 +178,16 @@ class DeviceRegistrationHandler {
       }
 
       final packageInfo = await PackageInfo.fromPlatform();
+      // Logged BEFORE the call, and unconditionally: the failure mode we chased
+      // (409 DEVICE_UNASSIGNED) means the server never records this version, so
+      // a line that only printed on success was silent exactly when it mattered.
+      logger.i('[STB] Check-in reporting '
+          'v${packageInfo.version}+${packageInfo.buildNumber}');
       final result = await _repo.checkin(
         deviceToken: token,
         macAddress: await _identity.getWifiMac(),
         installedAppVersion: packageInfo.version,
+        installedVersionCode: packageInfo.buildNumber,
         deviceModel: await _identity.getDeviceModel(),
         osVersion: await _identity.getOsVersion(),
       );
@@ -190,7 +196,7 @@ class DeviceRegistrationHandler {
         case DeviceCheckinStatus.success:
           final model = result.model!;
           logger.i(
-            '[STB] Check-in ok — latest v${model.latestAppVersion}, '
+            '[STB] Check-in ok — server latest v${model.latestAppVersion}, '
             '${model.commands.length} pending command(s)'
             '${model.commands.isEmpty ? '' : ': ${model.commands.map((c) => c.type).join(', ')}'}',
           );
