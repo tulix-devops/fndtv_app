@@ -15,19 +15,25 @@ class MainActivity : AudioServiceActivity() {
 
     private val deviceChannel = "com.fndtv.videoplayer/device"
 
+    /** Kept so the async install outcome can be pushed back to Dart. */
+    private var channel: MethodChannel? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, deviceChannel)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "getSerialNumber" -> result.success(readSerialNumber())
-                    "getWifiMac" -> result.success(readWifiMac())
-                    "openDateSettings" -> result.success(openDateSettings())
-                    "installApk" ->
-                        result.success(installApk(call.argument<String>("path")))
-                    else -> result.notImplemented()
-                }
+        val channel =
+            MethodChannel(flutterEngine.dartExecutor.binaryMessenger, deviceChannel)
+        this.channel = channel
+        channel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getSerialNumber" -> result.success(readSerialNumber())
+                "getWifiMac" -> result.success(readWifiMac())
+                "openDateSettings" -> result.success(openDateSettings())
+                "isDeviceOwner" -> result.success(ApkInstaller(this).isDeviceOwner())
+                "installApk" ->
+                    result.success(installApk(call.argument<String>("path")))
+                else -> result.notImplemented()
             }
+        }
         registerStbBridgeIfPresent(flutterEngine)
 
         // Native SurfaceView video player. Registered for every flavor (the code
@@ -125,10 +131,32 @@ class MainActivity : AudioServiceActivity() {
     private fun isValidMac(mac: String?): Boolean =
         !mac.isNullOrBlank() && mac != "02:00:00:00:00:00"
 
-    // Hands a downloaded APK to the system package installer via our FileProvider.
-    // Requires REQUEST_INSTALL_PACKAGES and, on ordinary apps, the user allowing
-    // "install unknown apps" for FNDTV (system/privileged STB apps skip that).
+    // Installs a downloaded APK.
+    //
+    // PackageInstaller first: on a device-owner box that installs silently, with
+    // no "install unknown apps" prompt — a pushed update used to stall on that
+    // prompt with nobody in front of the screen. It also reports WHY an install
+    // failed, which ACTION_VIEW never could.
+    //
+    // ACTION_VIEW stays as the fallback for when a session cannot even be
+    // created, so a box is never left with no way to update at all.
     private fun installApk(path: String?): Boolean {
+        val started = ApkInstaller(this).install(path) { outcome, message ->
+            runOnUiThread {
+                channel?.invokeMethod(
+                    "onInstallOutcome",
+                    mapOf("outcome" to outcome, "message" to message),
+                )
+            }
+        }
+        if (started) return true
+        android.util.Log.w("MainActivity", "session install unavailable — ACTION_VIEW")
+        return installApkViaViewIntent(path)
+    }
+
+    // Legacy path. Requires REQUEST_INSTALL_PACKAGES and, on ordinary apps, the
+    // user allowing "install unknown apps" for FNDTV.
+    private fun installApkViaViewIntent(path: String?): Boolean {
         if (path.isNullOrBlank()) return false
         return try {
             val file = File(path)

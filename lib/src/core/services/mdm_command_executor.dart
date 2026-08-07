@@ -146,7 +146,18 @@ class MdmCommandExecutor {
       // ack now (before the vanishing action) to avoid a redelivery loop.
       _updateProgress?.showInstalling();
       await _ack(id, true, result: 'installing v${model.latestVersion}');
-      await _installer.install(path);
+
+      final outcome = await _installer.install(path);
+      // Reaching here at all usually means the install did not take — a
+      // successful one replaces this process first. The command was already
+      // acked above and is deliberately not re-acked (the backend has no
+      // defined semantics for a second ack), but the reason must not vanish:
+      // this is the line that distinguishes "refused as a downgrade" from
+      // "someone dismissed the prompt".
+      if (outcome.didNotInstall) {
+        logger.w('[STB] UPDATE_APP install did not land: ${outcome.kind}'
+            '${outcome.message == null ? '' : ' — ${outcome.message}'}');
+      }
     } finally {
       _updateProgress?.hide();
     }

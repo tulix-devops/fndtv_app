@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:app_logger/app_logger.dart';
@@ -88,14 +89,122 @@ class UpdateInstaller {
     return ok;
   }
 
-  /// Launches the system package installer for the downloaded APK.
-  Future<bool> install(String path) async {
+  /// Whether this box can install silently (device owner). Callers use it only
+  /// to set expectations in the UI — the install path decides for itself.
+  Future<bool> isDeviceOwner() async {
     try {
-      final res = await _channel.invokeMethod<bool>('installApk', {'path': path});
-      return res ?? false;
+      return await _channel.invokeMethod<bool>('isDeviceOwner') ?? false;
     } catch (e) {
-      logger.w('[STB] install error: $e');
+      logger.w('[STB] isDeviceOwner error: $e');
       return false;
     }
+  }
+
+  /// Installs the downloaded APK and reports what happened.
+  ///
+  /// Resolves as soon as the outcome is known. On a *successful* self-update it
+  /// normally never resolves at all: the process is replaced before the status
+  /// broadcast is delivered. That is expected and handled — the Updates page
+  /// confirms success on next launch by comparing the running version against
+  /// the attempt it recorded, so this future is only load-bearing for failures.
+  Future<StbInstallOutcome> install(String path) async {
+    final completer = Completer<StbInstallOutcome>();
+
+    _channel.setMethodCallHandler((call) async {
+      if (call.method != 'onInstallOutcome') return null;
+      final args = (call.arguments as Map?) ?? const {};
+      final outcome = StbInstallOutcome.parse(
+        args['outcome'] as String?,
+        args['message'] as String?,
+      );
+      logger.i('[STB] install outcome: ${outcome.kind}'
+          '${outcome.message == null ? '' : ' — ${outcome.message}'}');
+      // PENDING_USER_ACTION is not terminal: the prompt is up and a real status
+      // follows once the viewer answers it.
+      if (outcome.kind == StbInstallResult.pendingUserAction) return null;
+      if (!completer.isCompleted) completer.complete(outcome);
+      return null;
+    });
+
+    try {
+      final started =
+          await _channel.invokeMethod<bool>('installApk', {'path': path});
+      if (started != true) {
+        return const StbInstallOutcome(StbInstallResult.failure, 'not started');
+      }
+    } catch (e) {
+      logger.w('[STB] install error: $e');
+      return StbInstallOutcome(StbInstallResult.failure, '$e');
+    }
+
+    // A silent device-owner install replaces this process, so waiting forever
+    // would strand the UI on a spinner in the one case that actually worked.
+    final outcome = await completer.future.timeout(
+      const Duration(minutes: 3),
+      onTimeout: () =>
+          const StbInstallOutcome(StbInstallResult.unknown, 'timed out'),
+    );
+    // Released so a later install (manual page vs MDM push) does not deliver
+    // its result into this finished completer.
+    _channel.setMethodCallHandler(null);
+    return outcome;
+  }
+}
+
+/// Why an install ended. Mirrors the keys in `ApkInstaller.kt`.
+enum StbInstallResult {
+  success,
+
+  /// Android refused the APK because its versionCode is not higher than what is
+  /// installed. This is the failure that used to be invisible — the update
+  /// "installed" and the box stayed on the old build.
+  blockedDowngrade,
+
+  /// The installed app and the downloaded APK are signed with different keys
+  /// (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`). Needs a different fix from a
+  /// downgrade — the APK on the server was built with the wrong keystore — so
+  /// it must not be reported as one.
+  blockedSignature,
+
+  /// Conflicts with the installed package for some other reason.
+  blockedConflict,
+
+  /// Cancelled, by the viewer or by the system.
+  aborted,
+
+  /// The session is waiting on the user to confirm (box is not device owner).
+  pendingUserAction,
+  failure,
+
+  /// No status arrived. Usually means the install succeeded and took the
+  /// process with it.
+  unknown,
+}
+
+class StbInstallOutcome {
+  final StbInstallResult kind;
+  final String? message;
+
+  const StbInstallOutcome(this.kind, [this.message]);
+
+  bool get didNotInstall =>
+      kind == StbInstallResult.blockedDowngrade ||
+      kind == StbInstallResult.blockedSignature ||
+      kind == StbInstallResult.blockedConflict ||
+      kind == StbInstallResult.aborted ||
+      kind == StbInstallResult.failure;
+
+  static StbInstallOutcome parse(String? key, String? message) {
+    final kind = switch (key) {
+      'success' => StbInstallResult.success,
+      'blocked_downgrade' => StbInstallResult.blockedDowngrade,
+      'blocked_signature' => StbInstallResult.blockedSignature,
+      'blocked_conflict' => StbInstallResult.blockedConflict,
+      'aborted' => StbInstallResult.aborted,
+      'pending_user_action' => StbInstallResult.pendingUserAction,
+      'failure' => StbInstallResult.failure,
+      _ => StbInstallResult.unknown,
+    };
+    return StbInstallOutcome(kind, message);
   }
 }

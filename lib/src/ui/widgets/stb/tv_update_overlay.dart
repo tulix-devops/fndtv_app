@@ -39,7 +39,10 @@ class TvUpdateOverlay extends StatelessWidget {
                           color: Colors.white70, size: 60),
                       const SizedBox(height: 22),
                       Text(
-                        l.updatesAvailable,
+                        // Not "Update available" — by the time this overlay is
+                        // up the update is already downloading or installing,
+                        // and the old wording read like nothing had started.
+                        l.updatesInProgress,
                         style: GoogleFonts.sora(
                             color: Colors.white,
                             fontSize: 22,
