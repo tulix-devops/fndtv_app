@@ -330,6 +330,18 @@ class _MainContainerPageState extends State<MainContainerPage> {
 
   @override
   Widget build(BuildContext context) {
+    // The channel load starts in initState, which on a cold-booted box runs
+    // before the network is up. Rather than wait on a timer, re-fire the moment
+    // connectivity actually arrives — the spinner then ends as early as it can,
+    // and a box that was offline at boot recovers with no keypress.
+    return BlocListener<NetworkCubit, NetworkState>(
+      listenWhen: (p, c) => !p.online && c.online,
+      listener: (context, _) => context.read<ContentCubit>().retryNow(),
+      child: _buildScaffold(context),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     // Language drives both the UI locale and the channel-language filter; derive
     // it from the LocalizationCubit so a persisted locale stays in sync.
     final selectedLanguage = FndtvLanguage.fromLocaleCode(
