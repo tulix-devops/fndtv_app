@@ -96,6 +96,24 @@ class AppLocalizationsFr extends AppLocalizations {
   String get updatesUpToDate => 'Vous avez la dernière version';
 
   @override
+  String get updatesNotInstalled => 'La mise à jour n\'a pas été installée';
+
+  @override
+  String get updatesNotInstalledHint =>
+      'La version précédente est toujours active. L\'installation a peut-être été annulée ou refusée par le boîtier.';
+
+  @override
+  String get updatesBlockedDowngrade =>
+      'Le boîtier a refusé cette version car elle n\'est pas plus récente que celle installée.';
+
+  @override
+  String get updatesInstallCancelled => 'L\'installation a été annulée.';
+
+  @override
+  String get updatesBlockedSignature =>
+      'Cette version est signée avec une clé différente de celle installée. Le paquet doit être reconstruit avec la bonne clé de signature.';
+
+  @override
   String get updatesAvailable => 'Mise à jour disponible';
 
   @override
@@ -118,6 +136,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get updatesInstalling => 'Installation…';
+
+  @override
+  String get updatesInProgress => 'Mise à jour en cours';
 
   @override
   String get navMenu => 'Menu';

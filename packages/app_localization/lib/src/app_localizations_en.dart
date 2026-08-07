@@ -96,6 +96,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updatesUpToDate => 'You\'re on the latest version';
 
   @override
+  String get updatesNotInstalled => 'Update did not install';
+
+  @override
+  String get updatesNotInstalledHint =>
+      'The previous version is still running. The install may have been cancelled, or the box refused it.';
+
+  @override
+  String get updatesBlockedDowngrade =>
+      'The box refused this build because its version is not newer than the one installed.';
+
+  @override
+  String get updatesInstallCancelled => 'The installation was cancelled.';
+
+  @override
+  String get updatesBlockedSignature =>
+      'This build is signed with a different key than the one installed. The update package needs rebuilding with the correct signing key.';
+
+  @override
   String get updatesAvailable => 'Update available';
 
   @override
@@ -118,6 +136,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get updatesInstalling => 'Installing…';
+
+  @override
+  String get updatesInProgress => 'Update in progress';
 
   @override
   String get navMenu => 'Menu';

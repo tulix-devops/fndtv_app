@@ -274,6 +274,36 @@ abstract class AppLocalizations {
   /// **'You\'re on the latest version'**
   String get updatesUpToDate;
 
+  /// No description provided for @updatesNotInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Update did not install'**
+  String get updatesNotInstalled;
+
+  /// No description provided for @updatesNotInstalledHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The previous version is still running. The install may have been cancelled, or the box refused it.'**
+  String get updatesNotInstalledHint;
+
+  /// No description provided for @updatesBlockedDowngrade.
+  ///
+  /// In en, this message translates to:
+  /// **'The box refused this build because its version is not newer than the one installed.'**
+  String get updatesBlockedDowngrade;
+
+  /// No description provided for @updatesInstallCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'The installation was cancelled.'**
+  String get updatesInstallCancelled;
+
+  /// No description provided for @updatesBlockedSignature.
+  ///
+  /// In en, this message translates to:
+  /// **'This build is signed with a different key than the one installed. The update package needs rebuilding with the correct signing key.'**
+  String get updatesBlockedSignature;
+
   /// No description provided for @updatesAvailable.
   ///
   /// In en, this message translates to:
@@ -321,6 +351,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Installing…'**
   String get updatesInstalling;
+
+  /// No description provided for @updatesInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Update in progress'**
+  String get updatesInProgress;
 
   /// No description provided for @navMenu.
   ///
