@@ -33,9 +33,16 @@ val isStbRelease = gradle.startParameter.taskNames.any {
     it.contains("stbRelease", ignoreCase = true)
 }
 
+// Any RELEASE apk (stb or normal). The normal release is what goes to the
+// Amazon Appstore for Fire TV — every Fire TV device is ARM, so the Intel
+// ABIs are dead weight there too. Debug builds keep x86_64 for the emulator.
+val isReleaseBuild = gradle.startParameter.taskNames.any {
+    it.contains("Release", ignoreCase = true)
+}
+
 android {
     namespace = "com.fndtv.videoplayer"
-    compileSdk = 35  // Latest Android API level (Android 15)
+    compileSdk = 36  // Required by media_kit/video_player plugin versions
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -122,14 +129,15 @@ android {
     // the big one lives (libmpv.so, ~12 MB per ABI, from media_kit_libs_android_
     // video). Excluding them at packaging time is what actually drops the apk
     // from ~113 MB to ~47 MB.
-    if (isStbRelease) {
+    if (isReleaseBuild) {
         packaging {
             jniLibs {
-                // Both ARM ABIs stay: we have not confirmed whether every box in
-                // the field runs a 64-bit userspace, and an arm64-only apk fails
-                // outright (INSTALL_FAILED_NO_MATCHING_ABIS) on a 32-bit one.
-                // Only the x86 pair goes — no set-top box is Intel, and it is
-                // the single largest ABI (~37 MB).
+                // Both ARM ABIs stay: 32-bit devices exist on both lines — STB
+                // boxes with a 32-bit userspace, and older Fire TV sticks are
+                // armeabi-v7a — and an arm64-only apk fails outright there
+                // (INSTALL_FAILED_NO_MATCHING_ABIS). Only the Intel pair goes —
+                // no set-top box, Fire TV, or phone we ship to is x86, and it
+                // is the single largest chunk (~37 MB).
                 excludes += setOf(
                     "**/x86/**",
                     "**/x86_64/**",

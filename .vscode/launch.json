@@ -8,19 +8,28 @@
         {
             "name": "fndtv_app",
             "request": "launch",
-            "type": "dart"
+            "type": "dart",
+            "args": ["--flavor", "normal"]
         },
         {
             "name": "fndtv_app (profile mode)",
             "request": "launch",
             "type": "dart",
-            "flutterMode": "profile"
+            "flutterMode": "profile",
+            "args": ["--flavor", "normal"]
         },
         {
             "name": "fndtv_app (release mode)",
             "request": "launch",
             "type": "dart",
-            "flutterMode": "release"
+            "flutterMode": "release",
+            "args": ["--flavor", "normal"]
+        },
+        {
+            "name": "fndtv_app (stb kiosk)",
+            "request": "launch",
+            "type": "dart",
+            "args": ["--flavor", "stb"]
         },
         {
             "name": "app_focus",

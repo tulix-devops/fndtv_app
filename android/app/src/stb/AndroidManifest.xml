@@ -7,6 +7,11 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Install a downloaded update APK (OTA self-update). stb-only: store
+         builds (Amazon Appstore / Play) update through the store, and Amazon
+         rejects apps that carry this permission. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Network manager (Wi-Fi/Ethernet bridge): scan requires location perm on
          API 29-32, NEARBY_WIFI_DEVICES on API 33+. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -76,8 +81,18 @@
             </intent-filter>
         </receiver>
 
-        <!-- FileProvider (${applicationId}.provider) is declared in the main
-             manifest so it's available to every flavor. -->
+        <!-- FileProvider for handing the downloaded update APK to the installer.
+             Lives here (not in the main manifest) so store builds ship no
+             APK-install plumbing at all. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/provider_paths" />
+        </provider>
 
     </application>
 </manifest>

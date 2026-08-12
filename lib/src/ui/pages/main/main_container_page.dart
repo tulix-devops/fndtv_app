@@ -381,11 +381,14 @@ class _MainContainerPageState extends State<MainContainerPage> {
                     (label: tab.title(context), icon: tab.navIcon),
                   // Language switcher — shows the active language, opens a popup.
                   (label: selectedLanguage.endonym, icon: Icons.language_rounded),
-                  // Software update check — opens a popup.
-                  (
-                    label: context.l.navUpdates,
-                    icon: Icons.system_update_rounded
-                  ),
+                  // STB: in-app OTA update check. Store builds (Amazon
+                  // Appstore / Play) update through the store — Amazon rejects
+                  // self-updating apps — so the page is stb-only.
+                  if (StbSystemService.isStb)
+                    (
+                      label: context.l.navUpdates,
+                      icon: Icons.system_update_rounded
+                    ),
                   // STB: in-app network manager — inline tab when online,
                   // full-screen when offline.
                   if (StbSystemService.isStb)
