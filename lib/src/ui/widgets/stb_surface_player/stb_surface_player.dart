@@ -250,7 +250,10 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
         if (cold) setState(() => _epgStatus = ScheduleStatus.error);
         return;
       }
-      final programs = sortedByStart(data.scheduleItems);
+      // From now onward only — the feed's window reaches back over the past
+      // day, and the strip is a "what's on / what's next" panel, not history.
+      final programs =
+          scheduleFromNow(sortedByStart(data.scheduleItems), DateTime.now());
       setState(() {
         _epgPrograms = programs;
         _epgLoadedAt = DateTime.now();

@@ -1,5 +1,6 @@
 import 'package:app_localization/app_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:fndtv/src/core/services/stb_clock.dart';
 import 'package:fndtv/src/data/models/content/images_model.dart';
 import 'package:fndtv/src/data/models/content/live_model.dart';
 import 'package:fndtv/src/ui/widgets/tv/tv_widgets.dart';
@@ -75,6 +76,33 @@ int scheduleFocusIndex(List<LiveModel> programs, DateTime now) {
     return start != null && start.isAfter(now);
   });
   return upcoming >= 0 ? upcoming : programs.length - 1;
+}
+
+/// Drops programs that have already finished, keeping what is on now and
+/// everything still to come.
+///
+/// The feed returns a rolling window that reaches back over the past day, so
+/// without this the strip opens on hours of listings that already aired — the
+/// viewer scrolls left into yesterday evening. A now-playing strip should
+/// answer "what is on and what is next".
+///
+/// A program is kept when its end is still ahead, which naturally keeps the one
+/// currently airing. Entries whose end time will not parse are kept too: the
+/// feed is not clean, and silently hiding a program because we could not read
+/// its timestamp is worse than showing it in the wrong place.
+///
+/// **Returns the list unchanged when the filter would empty it.** These boxes
+/// boot with a wrong clock — one in the field came up believing it was 7
+/// December and only corrected to 11 August once NTP ran — and a clock that is
+/// ahead makes every program look finished. Degrading to the old behaviour
+/// beats showing a blank strip on a box whose only fault is that it has not
+/// reached an NTP server yet.
+List<LiveModel> scheduleFromNow(List<LiveModel> programs, DateTime now) {
+  final upcoming = programs.where((p) {
+    final end = parseScheduleTime(p.endsAt);
+    return end == null || end.isAfter(now);
+  }).toList();
+  return upcoming.isEmpty ? programs : upcoming;
 }
 
 /// Chronological order. The `seasons` map gives no ordering guarantee, and the
@@ -290,7 +318,10 @@ class _ProgramCard extends StatelessWidget {
   static String _time(String? iso) {
     if (iso == null || iso.isEmpty) return '';
     try {
-      return DateFormat('HH:mm').format(DateTime.parse(iso).toLocal());
+      // Through StbClock, not toLocal(): the box's system zone is wrong on any
+      // box where `su` is refused, and nothing in the app can fix it there.
+      return DateFormat('HH:mm')
+          .format(StbClock.instance.toBoxLocal(DateTime.parse(iso)));
     } catch (_) {
       return '';
     }
