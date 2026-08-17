@@ -53,3 +53,7 @@ app.*.map.json
 .fvm/
 # Brainstorming visual-companion sessions
 .superpowers/
+
+# Gradle build output for the android module (the /build/ rule above only
+# covers the project root).
+/android/build/
