@@ -11,15 +11,34 @@ class DeviceModelService {
 
   String _deviceModel = '';
 
+  /// Hardware model reported at provisioning and check-in — e.g. `X88 Pro 14`.
+  ///
+  /// This used to return `androidInfo.id`, which is `Build.ID`: the BUILD
+  /// fingerprint id (`BT2A.260319.001`), identical across every box of a batch
+  /// and the very same value the serial already falls back to. So the fleet
+  /// records carried a build id in the model column and the console could not
+  /// answer "which hardware is failing" at all — which is exactly the question
+  /// when only a few boxes misbehave.
+  ///
+  /// `Build.MODEL` is the marketing name and needs no permission. The build id
+  /// is still useful for spotting a bad firmware revision, so it is kept
+  /// alongside rather than dropped.
   Future<String> get deviceModel async {
     if (_deviceModel.isNotEmpty) return _deviceModel;
 
-    _deviceModel = Platform.isIOS
-        ? (await _plugin.iosInfo).identifierForVendor.toString()
-        : (await _plugin.androidInfo).id;
+    if (Platform.isIOS) {
+      _deviceModel = (await _plugin.iosInfo).identifierForVendor.toString();
+      return _deviceModel;
+    }
 
-    String cleanDeviceModel = _deviceModel.replaceAll('.', '');
-    _deviceModel = cleanDeviceModel;
+    final info = await _plugin.androidInfo;
+    final model = info.model.trim();
+    final buildId = info.id.trim();
+    _deviceModel = switch ((model.isNotEmpty, buildId.isNotEmpty)) {
+      (true, true) => '$model ($buildId)',
+      (true, false) => model,
+      _ => buildId,
+    };
     return _deviceModel;
   }
 
