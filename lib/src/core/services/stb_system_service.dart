@@ -1,11 +1,27 @@
 import 'package:app_logger/app_logger.dart';
 import 'package:flutter/services.dart';
 
-/// Package names to uninstall on STB boot (bloatware/other launchers).
-/// Ported from the native launcher's `res/xml/unwanted_apps.xml`.
-/// Removal is irreversible (root `pm uninstall`).
+/// Preinstalled apps the box should not offer, removed on STB boot.
+///
+/// This list is for **bloat only**. Competing launchers no longer belong here:
+/// the native side now discovers every package that answers the HOME intent and
+/// neutralises all of them, because the launcher that steals the box is by
+/// definition the one nobody thought to add to a static list. `com.smartbox.
+/// launcher` stays purely so it is also removed as an app, not just as a HOME
+/// candidate.
+///
+/// Removal is `pm uninstall --user 0` (the APK survives on /system, so a factory
+/// reset restores it), falling back to `pm disable-user` for packages the
+/// firmware refuses to uninstall.
 const List<String> kStbUnwantedApps = <String>[
-  'com.google.android.youtube.tv', // YouTube TV
+  // YouTube ships under different ids depending on the firmware image: the
+  // leanback build on the Android TV boxes, the phone build on the AOSP-tablet
+  // ones. Boxes in the field have had both, so both are listed — an id that
+  // isn't present costs one `pm list` and no writes.
+  'com.google.android.youtube.tv', // YouTube (Android TV)
+  'com.google.android.youtube', // YouTube (phone/tablet build)
+  'com.google.android.apps.youtube.music', // YouTube Music
+  'com.google.android.videos', // Google TV / Play Movies
   'com.netflix.mediaclient', // Netflix
   'com.amazon.amazonvideo.livingroom', // Prime Video
   'com.smartbox.launcher', // Smartbox Launcher
@@ -35,6 +51,9 @@ const List<String> kStbDisabledComponents = <String>[
 /// remove the entry, or on the box `pm enable com.google.android.gms`.
 const List<String> kStbDisabledPackages = <String>[
   'com.rockchips.mediacenter', // Rockchip Media Center
+  // Google TV Home is now also caught by HOME-candidate discovery, which runs
+  // first and disables it; this entry is a harmless belt-and-braces for boxes
+  // where the query comes back empty.
   'com.google.android.tvlauncher', // Google TV Home (competing launcher)
   // GMS/GSF disable is PARKED (2026-07-28): shipped together with the zero-copy
   // video change and the box came up on a blank screen, so we couldn't tell
@@ -42,6 +61,97 @@ const List<String> kStbDisabledPackages = <String>[
   // 'com.google.android.gms',
   // 'com.google.android.gsf',
 ];
+
+/// A timezone resolved from public-IP geolocation.
+class StbTimezone {
+  const StbTimezone({
+    required this.id,
+    required this.offsetSeconds,
+    required this.applied,
+  });
+
+  /// IANA id, e.g. `Europe/Paris`.
+  final String id;
+
+  /// Current offset from UTC in seconds, DST included.
+  final int offsetSeconds;
+
+  /// Whether it was also written to the SYSTEM zone. False without root — the
+  /// box keeps reporting the wrong zone and only the app renders correctly.
+  final bool applied;
+
+  @override
+  String toString() =>
+      'StbTimezone($id, ${offsetSeconds}s, applied: $applied)';
+}
+
+/// Verified outcome of one kiosk-maintenance pass.
+///
+/// Two separate questions, and the difference is what the field has been
+/// living with:
+///  - [ready] — is FNDTV the HOME app *right now*?
+///  - [durable] — will it still be after the next reboot? False means the pin
+///    rests on a preferred-activity record with other launchers still installed,
+///    which Android drops as soon as the candidate set moves. A box can be
+///    perfectly fine today and back on the chooser tomorrow.
+class StbKioskStatus {
+  const StbKioskStatus({
+    required this.ready,
+    required this.durable,
+    required this.root,
+    required this.deviceOwner,
+    required this.launcher,
+    required this.homeCandidates,
+    required this.summary,
+  });
+
+  /// Off-flavor, or the channel call failed — nothing is known, nothing to do.
+  const StbKioskStatus.unsupported()
+      : ready = false,
+        durable = false,
+        root = false,
+        deviceOwner = false,
+        launcher = null,
+        homeCandidates = const [],
+        summary = const {};
+
+  factory StbKioskStatus.fromSummary(Map<String, Object?> summary) {
+    List<String> strings(Object? v) =>
+        v is List ? v.whereType<String>().toList() : const [];
+    return StbKioskStatus(
+      ready: summary['kioskReady'] == true,
+      durable: summary['kioskDurable'] == true,
+      root: summary['root'] == true,
+      deviceOwner: summary['deviceOwner'] == true,
+      launcher: summary['launcherAfter'] as String?,
+      homeCandidates: strings(summary['homeCandidatesAfter']),
+      summary: summary,
+    );
+  }
+
+  /// FNDTV is the default HOME app.
+  final bool ready;
+
+  /// [ready], and nothing left that can take HOME back.
+  final bool durable;
+
+  final bool root;
+  final bool deviceOwner;
+
+  /// Package holding HOME after the pass.
+  final String? launcher;
+
+  /// Other packages that can still answer HOME.
+  final List<String> homeCandidates;
+
+  /// The raw native summary, for logs and check-in reporting.
+  final Map<String, Object?> summary;
+
+  @override
+  String toString() => 'StbKioskStatus(ready: $ready, durable: $durable, '
+      'root: $root, deviceOwner: $deviceOwner, launcher: $launcher, '
+      'homeCandidates: $homeCandidates)';
+}
 
 /// Dart side of the STB-only native bridge (`com.fndtv.videoplayer/stb`).
 ///
@@ -79,10 +189,31 @@ class StbSystemService {
     }
   }
 
-  /// Detects the timezone from public-IP geolocation and (if the box is rooted)
-  /// applies it to the system. Returns the detected timezone id, or null.
-  /// Fire-and-forget safe: never throws.
-  Future<String?> syncTimezone() => _invokeString('syncTimezone');
+  /// Detects the box's timezone from public-IP geolocation and, when root
+  /// allows, applies it to the system. Null when nothing resolved (offline).
+  ///
+  /// The offset matters more than the id: applying the zone needs root, so on a
+  /// box where `su` is refused the system zone stays wrong and `toLocal()` is
+  /// permanently out. [StbClock] renders through the offset instead.
+  Future<StbTimezone?> syncTimezone() async {
+    if (!isStb) return null;
+    try {
+      final res =
+          await _channel.invokeMethod<Map<Object?, Object?>>('syncTimezone');
+      if (res == null) return null;
+      final id = res['id'] as String?;
+      final offset = res['offsetSeconds'] as int?;
+      if (id == null || offset == null) return null;
+      return StbTimezone(
+        id: id,
+        offsetSeconds: offset,
+        applied: res['applied'] == true,
+      );
+    } catch (e) {
+      logger.w('[STB] syncTimezone failed: $e');
+      return null;
+    }
+  }
 
   /// Logs the box's device/network info once (field diagnostics + a smoke test
   /// that the native bridge is wired). No-op off the stb flavor.
@@ -115,6 +246,38 @@ class StbSystemService {
 
   /// Package name of the current default HOME launcher.
   Future<String?> defaultLauncher() => _invokeString('defaultLauncher');
+
+  /// Every OTHER package that can currently answer the HOME intent — i.e. that
+  /// can appear in the "Use ___ as Home" chooser. Empty means nothing can take
+  /// the box from us.
+  Future<List<String>> homeCandidates() async {
+    if (!isStb) return const [];
+    try {
+      final res = await _channel.invokeMethod<List<Object?>>('homeCandidates');
+      return res?.whereType<String>().toList() ?? const [];
+    } catch (e) {
+      logger.w('[STB] homeCandidates failed: $e');
+      return const [];
+    }
+  }
+
+  /// Read-only snapshot of everything the kiosk takeover depends on, for
+  /// display on the box itself.
+  ///
+  /// Exists because a box in a customer's home is not on adb: "it did the same
+  /// thing" is not a diagnosis, and a photo of this screen is. Keys mirror
+  /// `StbBridge.kioskDiagnostics`. Empty off-flavor or on channel failure.
+  Future<Map<String, Object?>> kioskDiagnostics() async {
+    if (!isStb) return const {};
+    try {
+      final res =
+          await _channel.invokeMethod<Map<Object?, Object?>>('kioskDiagnostics');
+      return res?.map((k, v) => MapEntry(k.toString(), v)) ?? const {};
+    } catch (e) {
+      logger.w('[STB] kioskDiagnostics failed: $e');
+      return const {};
+    }
+  }
 
   Future<bool> setDefaultLauncher() => _invokeBool('setDefaultLauncher');
 
@@ -178,16 +341,19 @@ class StbSystemService {
     }
   }
 
-  /// Boot-time kiosk maintenance: device-owner provisioning, default-launcher
-  /// takeover, removal of [unwantedApps] (uninstall), and disabling of
-  /// [disabledComponents] / [disabledPackages] (blocked but kept). Returns a
-  /// summary map. No-op without root. Fire-and-forget safe.
-  Future<Map<String, Object?>> runStartupMaintenance({
+  /// Boot-time kiosk maintenance: competing-launcher removal, unwanted-app
+  /// removal, then the HOME takeover — in that order, because pinning HOME
+  /// before the candidate set is final makes Android drop the preference again.
+  ///
+  /// Returns the verified outcome, not a record of what was attempted. Callers
+  /// should retry while [StbKioskStatus.ready] is false — see `StbKioskGuard`.
+  /// No-op off the stb flavor. Never throws.
+  Future<StbKioskStatus> runStartupMaintenance({
     List<String> unwantedApps = kStbUnwantedApps,
     List<String> disabledComponents = kStbDisabledComponents,
     List<String> disabledPackages = kStbDisabledPackages,
   }) async {
-    if (!isStb) return const {};
+    if (!isStb) return const StbKioskStatus.unsupported();
     try {
       final res = await _channel.invokeMethod<Map<Object?, Object?>>(
         'runStartupMaintenance',
@@ -199,10 +365,10 @@ class StbSystemService {
       );
       final summary = res?.map((k, v) => MapEntry(k.toString(), v)) ?? {};
       logger.i('[STB] startup maintenance: $summary');
-      return summary;
+      return StbKioskStatus.fromSummary(summary);
     } catch (e) {
       logger.w('[STB] runStartupMaintenance failed: $e');
-      return const {};
+      return const StbKioskStatus.unsupported();
     }
   }
 

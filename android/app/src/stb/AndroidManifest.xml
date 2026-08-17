@@ -80,4 +80,19 @@
              manifest so it's available to every flavor. -->
 
     </application>
+
+    <!-- Package visibility for the kiosk takeover.
+
+         From Android 11 an app cannot see other packages unless it declares
+         what it needs, and queryIntentActivities() silently returns a FILTERED
+         list — so without this the box reports "no competing launchers" while
+         SmartLauncher is sitting right there waiting to win the HOME chooser.
+         Declaring the HOME intent grants visibility of exactly the launchers we
+         have to neutralise, with no QUERY_ALL_PACKAGES. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+    </queries>
 </manifest>

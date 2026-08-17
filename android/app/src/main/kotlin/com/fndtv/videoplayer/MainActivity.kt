@@ -29,6 +29,9 @@ class MainActivity : AudioServiceActivity() {
                 "getAndroidId" -> result.success(readAndroidId())
                 "getWifiMac" -> result.success(readWifiMac())
                 "openDateSettings" -> result.success(openDateSettings())
+                "isHomeApp" -> result.success(isHomeApp())
+                "canRequestHomeRole" -> result.success(canRequestHomeRole())
+                "requestHomeRole" -> result.success(requestHomeRole())
                 "isDeviceOwner" -> result.success(ApkInstaller(this).isDeviceOwner())
                 "installApk" ->
                     result.success(installApk(call.argument<String>("path")))
@@ -194,6 +197,80 @@ class MainActivity : AudioServiceActivity() {
         }
     }
 
+    // ─── HOME role ────────────────────────────────────────────────────────────
+    //
+    // The one way an ORDINARY app can become the launcher: no root, no device
+    // owner. It matters because of what it writes.
+    //
+    // Picking FNDTV from the "Use ___ as Home" chooser sets a PREFERRED
+    // ACTIVITY, and Android drops that record whenever the set of HOME
+    // candidates changes — including when FNDTV itself is installed or updated.
+    // A box logged exactly that: "Result set changed, dropping preferred
+    // activity for Intent { act=MAIN cat=[HOME, DEFAULT] }", 12 ms after our own
+    // APK finished installing. So every update puts the chooser back, which is
+    // why "we choose Always and it keeps coming back".
+    //
+    // The ROLE is held by RoleManager, survives a package update, and is what we
+    // actually want. Requesting it costs one system dialog and one confirmation.
+
+    private fun isHomeApp(): Boolean = try {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        packageManager
+            .resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            ?.activityInfo?.packageName == packageName
+    } catch (_: Throwable) {
+        false
+    }
+
+    /** Whether this box can show the HOME role dialog at all (API 29+, and the
+     *  role has to exist — some OEM images strip the role UI). */
+    private fun canRequestHomeRole(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        return try {
+            val rm = getSystemService(android.app.role.RoleManager::class.java)
+            rm != null &&
+                rm.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME) &&
+                !rm.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)
+        } catch (t: Throwable) {
+            android.util.Log.w("MainActivity", "canRequestHomeRole failed", t)
+            false
+        }
+    }
+
+    /**
+     * Shows the system "make FNDTV your Home app" dialog. Returns whether it was
+     * launched — the answer arrives later, so callers re-check [isHomeApp].
+     *
+     * Falls back to the system Home-app settings screen when the role dialog is
+     * unavailable, which still reaches the same setting in two more key presses
+     * rather than leaving the technician with nothing.
+     */
+    private fun requestHomeRole(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val rm = getSystemService(android.app.role.RoleManager::class.java)
+                if (rm != null &&
+                    rm.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)
+                ) {
+                    startActivityForResult(
+                        rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME),
+                        REQUEST_HOME_ROLE,
+                    )
+                    return true
+                }
+            } catch (t: Throwable) {
+                android.util.Log.w("MainActivity", "requestHomeRole failed", t)
+            }
+        }
+        return try {
+            startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
+            true
+        } catch (t: Throwable) {
+            android.util.Log.w("MainActivity", "ACTION_HOME_SETTINGS failed", t)
+            false
+        }
+    }
+
     // Opens the system date/time settings so the user can correct the clock
     // (useful on a box whose time is wrong / not NTP-synced).
     private fun openDateSettings(): Boolean {
@@ -209,6 +286,12 @@ class MainActivity : AudioServiceActivity() {
 
     private fun isValid(value: String?): Boolean =
         !value.isNullOrBlank() && !value.equals("unknown", ignoreCase = true)
+
+    private companion object {
+        /** Result code for the HOME role dialog. The outcome is read back by
+         *  re-checking [isHomeApp], so nothing is done with it directly. */
+        const val REQUEST_HOME_ROLE = 4711
+    }
 
     private fun systemProperty(key: String): String? {
         return try {
