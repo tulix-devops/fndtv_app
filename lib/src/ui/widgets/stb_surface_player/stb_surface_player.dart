@@ -40,22 +40,6 @@ import 'package:ui_kit/ui_kit.dart';
 ///
 /// See `StbSurfacePlayer.kt` for the engine side (MediaPlayer first, ExoPlayer
 /// second, both on the same SurfaceView).
-/// Whether a start failure should be handed to the mpv player.
-///
-/// Hand-off is a real cost on this hardware, not a neutral retry: mpv renders
-/// through a Flutter texture, which on the legacy boxes forces
-/// `mediacodec-copy` and runs short of realtime — the slow motion. So it is
-/// worth it only when the native engines genuinely cannot play the stream.
-///
-/// [provenPlayable] is what stops a stream that has already drawn on this box
-/// from being handed over just because a later open was slow or glitched.
-bool shouldHandOffToMpv({
-  required bool everHadFrame,
-  required bool provenPlayable,
-  required bool hasCallback,
-}) =>
-    hasCallback && !everHadFrame && !provenPlayable;
-
 class StbSurfacePlayer extends StatefulWidget {
   const StbSurfacePlayer({
     super.key,
@@ -82,6 +66,25 @@ class StbSurfacePlayer extends StatefulWidget {
   @override
   State<StbSurfacePlayer> createState() => _StbSurfacePlayerState();
 }
+
+/// One press of ←/→, or of the rewind/forward buttons.
+const Duration _kSeekStep = Duration(seconds: 10);
+
+/// Whether a start failure should be handed to the mpv player.
+///
+/// Hand-off is a real cost on this hardware, not a neutral retry: mpv renders
+/// through a Flutter texture, which on the legacy boxes forces
+/// `mediacodec-copy` and runs short of realtime — the slow motion. So it is
+/// worth it only when the native engines genuinely cannot play the stream.
+///
+/// [provenPlayable] is what stops a stream that has already drawn on this box
+/// from being handed over just because a later open was slow or glitched.
+bool shouldHandOffToMpv({
+  required bool everHadFrame,
+  required bool provenPlayable,
+  required bool hasCallback,
+}) =>
+    hasCallback && !everHadFrame && !provenPlayable;
 
 class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
   static const Duration _controlsTimeout = Duration(seconds: 4);
@@ -237,6 +240,15 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
         logger.i('[STB-surface] perf dropped=${map['droppedFrames']}');
       case 'completed':
         setState(() => _playing = false);
+        // A finished VOD has nothing left to show, so sitting on its last
+        // frame just leaves the viewer pressing Back to escape a dead screen.
+        // Live never ends by itself — a 'completed' there means the feed
+        // dropped, which is a failure to report, not a reason to walk out of
+        // the channel.
+        if (!_isLive) {
+          logger.i('[STB-surface] VOD finished — leaving the player');
+          Navigator.of(context).maybePop();
+        }
       case 'error':
         final message = map['message'] as String? ?? 'unknown';
         logger.w('[STB-surface] error: $message');
@@ -502,10 +514,10 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
         unawaited(_togglePlay());
         return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowLeft:
-        unawaited(_seekBy(const Duration(seconds: -10)));
+        unawaited(_seekBy(-_kSeekStep));
         return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowRight:
-        unawaited(_seekBy(const Duration(seconds: 10)));
+        unawaited(_seekBy(_kSeekStep));
         return KeyEventResult.handled;
       case LogicalKeyboardKey.escape:
         // Keyboard convenience only. The remote's Back arrives as a platform
@@ -609,6 +621,8 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
                       position: _position,
                       duration: _duration,
                       onPlayPause: _togglePlay,
+                      onRewind: () => _seekBy(-_kSeekStep),
+                      onForward: () => _seekBy(_kSeekStep),
                       scheduleHint:
                           _epgAvailable ? context.l.sectionSchedule : null,
                     ),
@@ -713,6 +727,8 @@ class _SurfaceBottomBar extends StatelessWidget {
     required this.position,
     required this.duration,
     required this.onPlayPause,
+    required this.onRewind,
+    required this.onForward,
     this.scheduleHint,
   });
 
@@ -721,6 +737,8 @@ class _SurfaceBottomBar extends StatelessWidget {
   final Duration position;
   final Duration duration;
   final VoidCallback onPlayPause;
+  final VoidCallback onRewind;
+  final VoidCallback onForward;
 
   /// "Schedule" label shown beside a ↑ glyph, so the strip is discoverable.
   final String? scheduleHint;
@@ -745,6 +763,16 @@ class _SurfaceBottomBar extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // Rewind / forward flank play·pause on VOD. They mirror what ←/→ on
+          // the remote already do — a D-pad has no pointer, so these are the
+          // affordance that makes seeking discoverable at all. Hidden on live,
+          // where there is nothing to seek through.
+          if (!isLive)
+            IconButton(
+              onPressed: onRewind,
+              icon: const Icon(Icons.replay_10_rounded,
+                  color: Colors.white, size: 30),
+            ),
           IconButton(
             onPressed: onPlayPause,
             icon: Icon(
@@ -753,6 +781,12 @@ class _SurfaceBottomBar extends StatelessWidget {
               size: 34,
             ),
           ),
+          if (!isLive)
+            IconButton(
+              onPressed: onForward,
+              icon: const Icon(Icons.forward_10_rounded,
+                  color: Colors.white, size: 30),
+            ),
           const SizedBox(width: 12),
           if (isLive)
             Container(
@@ -771,11 +805,40 @@ class _SurfaceBottomBar extends StatelessWidget {
               ),
             )
           else
-            Text(
-              '${_fmt(position)} / ${_fmt(duration)}',
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
+            // Matches the mpv player's bar so a viewer cannot tell which engine
+            // their box happens to be running.
+            Expanded(
+              child: Row(
+                children: [
+                  Text(_fmt(position),
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 14)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: duration.inMilliseconds > 0
+                            ? (position.inMilliseconds /
+                                    duration.inMilliseconds)
+                                .clamp(0.0, 1.0)
+                            : 0.0,
+                        minHeight: 6,
+                        backgroundColor: Colors.white24,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          context.uiColors.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(_fmt(duration),
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 14)),
+                ],
+              ),
             ),
-          const Spacer(),
+          if (isLive) const Spacer(),
           if (scheduleHint != null)
             Row(
               mainAxisSize: MainAxisSize.min,
