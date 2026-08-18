@@ -40,6 +40,22 @@ import 'package:ui_kit/ui_kit.dart';
 ///
 /// See `StbSurfacePlayer.kt` for the engine side (MediaPlayer first, ExoPlayer
 /// second, both on the same SurfaceView).
+/// Whether a start failure should be handed to the mpv player.
+///
+/// Hand-off is a real cost on this hardware, not a neutral retry: mpv renders
+/// through a Flutter texture, which on the legacy boxes forces
+/// `mediacodec-copy` and runs short of realtime — the slow motion. So it is
+/// worth it only when the native engines genuinely cannot play the stream.
+///
+/// [provenPlayable] is what stops a stream that has already drawn on this box
+/// from being handed over just because a later open was slow or glitched.
+bool shouldHandOffToMpv({
+  required bool everHadFrame,
+  required bool provenPlayable,
+  required bool hasCallback,
+}) =>
+    hasCallback && !everHadFrame && !provenPlayable;
+
 class StbSurfacePlayer extends StatefulWidget {
   const StbSurfacePlayer({
     super.key,
@@ -109,6 +125,21 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
   /// Never resets — records whether ANY engine produced picture, which decides
   /// error-overlay vs hand-off (see [StbSurfacePlayer.onUnplayable]).
   bool _everHadFrame = false;
+
+  /// Stream URLs that have produced a frame through the native engines during
+  /// this app session.
+  ///
+  /// Static on purpose. [_everHadFrame] lives on the widget, so it is false
+  /// again on every fresh open — and a viewer who restarted a film that had
+  /// been playing perfectly would have it declared unplayable and handed to the
+  /// mpv path, which on this hardware is the slow-motion one. That is exactly
+  /// what the field reported: paused, restarted, and it came back in slow
+  /// motion with the other player's controls. A stream that has drawn on this
+  /// box is not unplayable.
+  ///
+  /// Session-scoped rather than persisted: this is a claim about what worked a
+  /// few minutes ago, not a permanent property of the stream.
+  static final Set<String> _provenPlayable = <String>{};
   String? _error;
 
   Duration _position = Duration.zero;
@@ -191,6 +222,7 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
       case 'firstFrame':
         logger.i('[STB-surface] first frame');
         _everHadFrame = true;
+        _provenPlayable.add(widget.link);
         setState(() {
           _firstFrame = true;
           _buffering = false;
@@ -208,11 +240,22 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
       case 'error':
         final message = map['message'] as String? ?? 'unknown';
         logger.w('[STB-surface] error: $message');
-        if (!_everHadFrame && widget.onUnplayable != null) {
+        if (shouldHandOffToMpv(
+          everHadFrame: _everHadFrame,
+          provenPlayable: _provenPlayable.contains(widget.link),
+          hasCallback: widget.onUnplayable != null,
+        )) {
           logger.w('[STB-surface] no engine could start this stream — '
               'handing back for the mpv path');
           widget.onUnplayable!();
           return;
+        }
+        if (!_everHadFrame && _provenPlayable.contains(widget.link)) {
+          // Refusing the hand-off on purpose: this stream has drawn on this box
+          // already, so the native engines can play it and mpv would only cost
+          // the viewer picture quality. Show the error and let them retry.
+          logger.w('[STB-surface] refusing mpv hand-off — this stream has '
+              'played on this box before; showing the error instead');
         }
         setState(() {
           _error = message;
@@ -358,7 +401,11 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
 
   Future<void> _togglePlay() async {
     _revealControls();
-    await _method?.invokeMethod<void>(_playing ? 'pause' : 'play');
+    // The NATIVE side picks the direction, from the engine's own transport
+    // state. Deciding it here from `_playing` is what broke resume: MediaPlayer
+    // reports no state changes, so after a pause the flag stayed true and the
+    // next press sent `pause` again — the video could never be started back up.
+    await _method?.invokeMethod<void>('togglePlay');
   }
 
   Future<void> _seekBy(Duration delta) async {

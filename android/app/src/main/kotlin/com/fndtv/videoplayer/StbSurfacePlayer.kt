@@ -3,6 +3,7 @@ package com.fndtv.videoplayer
 import android.content.Context
 import android.media.MediaPlayer
 import android.os.Handler
+import android.os.SystemClock
 import android.os.Looper
 import android.util.Log
 import android.view.Gravity
@@ -86,6 +87,9 @@ private interface PlaybackEngine {
     fun open(url: String, autoplay: Boolean)
     fun play()
     fun pause()
+
+    /** Whether the transport is actually running, asked of the engine itself. */
+    fun isPlaying(): Boolean
     fun seekTo(ms: Long)
     fun positionMs(): Long
     fun durationMs(): Long
@@ -168,6 +172,9 @@ class StbSurfacePlayerView(
     private var pendingAutoplay = true
 
     private var firstFrameSeen = false
+
+    /** When the current engine was opened — bounds the watchdog re-arms. */
+    private var engineStartedAt = 0L
     private var firstFrameWatchdog: Runnable? = null
     private var currentUrl: String = ""
     private var currentAutoplay = true
@@ -233,6 +240,14 @@ class StbSurfacePlayerView(
             }
             "play" -> { engine?.play(); result.success(null) }
             "pause" -> { engine?.pause(); result.success(null) }
+            // Direction decided HERE, against the engine's real state, rather
+            // than from a `_playing` flag on the Dart side that can drift out
+            // of sync and then toggle the wrong way — see MediaPlayerEngine.
+            "togglePlay" -> {
+                val e = engine
+                if (e != null) { if (e.isPlaying()) e.pause() else e.play() }
+                result.success(null)
+            }
             "seekTo" -> {
                 val ms = (call.argument<Number>("positionMs") ?: 0).toLong()
                 engine?.seekTo(ms)
@@ -264,6 +279,7 @@ class StbSurfacePlayerView(
         currentUrl = url
         currentAutoplay = autoplay
         firstFrameSeen = false
+        engineStartedAt = SystemClock.elapsedRealtime()
         Log.i(TAG, "engine=${next.name} opening $url")
         send(mapOf("event" to "engine", "name" to next.name))
         next.open(url, autoplay)
@@ -305,16 +321,49 @@ class StbSurfacePlayerView(
      * produces an output frame or an error, so no listener ever fires. Only
      * elapsed time detects that. Healthy channels start in ~2s here.
      */
-    private fun armFirstFrameWatchdog(engineName: String) {
+    private fun armFirstFrameWatchdog(engineName: String, ready: Boolean = false) {
         cancelFirstFrameWatchdog()
-        val timeoutMs =
-            if (engineName == ENGINE_MEDIAPLAYER) MP_FIRST_FRAME_MS else EXO_FIRST_FRAME_MS
+        // TWO PHASES, because the old single deadline measured the wrong thing.
+        //
+        // It started at open() and so spent its whole budget on the network:
+        // a VOD that simply took a while to fetch was declared unplayable,
+        // cascaded through both engines, and handed the box to mpv — which on
+        // this hardware is the slow-motion path. A viewer reported exactly
+        // that: a film that had been playing fine came back in slow motion
+        // with the other player's controls after a restart.
+        //
+        // The wedge this watchdog exists for happens AFTER the source is
+        // ready: the engine has parsed the stream, accepts input, and never
+        // emits a frame or an error. So the short render budget starts at
+        // `ready`, and while the source is still opening it only has to beat a
+        // generous ceiling — an open that genuinely fails reports an error of
+        // its own, which advances the engine without waiting for any clock.
+        val timeoutMs = when {
+            !ready -> OPEN_CEILING_MS
+            engineName == ENGINE_MEDIAPLAYER -> MP_FIRST_FRAME_MS
+            else -> EXO_FIRST_FRAME_MS
+        }
+        val phase = if (ready) "render" else "open"
+
+        // Re-arming on evidence of life must not become an indefinite reprieve.
+        // The wedge case can sit in READY and drop back to BUFFERING as its
+        // buffer drains, and each of those would otherwise reset the deadline
+        // forever — trading a premature fallback for one that never happens.
+        // Nothing may push the decision past this absolute cap.
+        val elapsed = SystemClock.elapsedRealtime() - engineStartedAt
+        val remaining = TOTAL_CEILING_MS - elapsed
+        if (remaining <= 0L) {
+            advanceEngine("no first frame in ${TOTAL_CEILING_MS}ms total on $engineName")
+            return
+        }
+        val delay = minOf(timeoutMs, remaining)
+
         val task = Runnable {
             if (firstFrameSeen) return@Runnable
-            advanceEngine("no first frame in ${timeoutMs}ms on $engineName")
+            advanceEngine("no first frame in ${delay}ms ($phase) on $engineName")
         }
         firstFrameWatchdog = task
-        main.postDelayed(task, timeoutMs)
+        main.postDelayed(task, delay)
     }
 
     private fun cancelFirstFrameWatchdog() {
@@ -392,6 +441,22 @@ class StbSurfacePlayerView(
         }
 
     private fun send(payload: Map<String, Any?>) {
+        // Both engines report readiness as `initialized` and rebuffering as
+        // `buffering`, so the watchdog is re-armed here rather than in each
+        // engine. Either is evidence the pipeline is alive, which is what the
+        // deadline should be measured against — the same "decide on progress,
+        // not on logs" lesson already recorded in StbVideoPlayer's stall
+        // watchdog.
+        if (!firstFrameSeen) {
+            val engineName = engine?.name
+            when {
+                payload["event"] == "initialized" && engineName != null ->
+                    armFirstFrameWatchdog(engineName, ready = true)
+                payload["event"] == "buffering" && payload["value"] == false &&
+                    engineName != null ->
+                    armFirstFrameWatchdog(engineName, ready = true)
+            }
+        }
         main.post { events?.success(payload) }
     }
 
@@ -495,8 +560,34 @@ class StbSurfacePlayerView(
             p.prepareAsync()
         }
 
-        override fun play() { player?.start() }
-        override fun pause() { if (player?.isPlaying == true) player?.pause() }
+        /** `isPlaying` throws if the player is not in a valid state. */
+        private fun playingNow(): Boolean =
+            try { player?.isPlaying == true } catch (_: IllegalStateException) { false }
+
+        // BOTH of these must report the new transport state.
+        //
+        // MediaPlayer has no state callback — there is no equivalent of
+        // ExoPlayer's onIsPlayingChanged, so nothing else tells Dart that the
+        // transport moved, and the only "playing" event ever sent was the one
+        // at autoplay. Dart's `_playing` therefore stayed true forever, and
+        // since it decides the toggle direction (`_playing ? pause : play`),
+        // the press after a pause sent `pause` AGAIN. The guard below makes
+        // that a no-op, so the video could never be resumed and the button
+        // looked dead — the reported "we paused it and were never able to
+        // play again".
+        override fun play() {
+            runCatching { player?.start() }
+                .onFailure { Log.w(TAG, "MediaPlayer.start failed", it) }
+            send(mapOf("event" to "playing", "value" to playingNow()))
+        }
+
+        override fun pause() {
+            runCatching { if (playingNow()) player?.pause() }
+                .onFailure { Log.w(TAG, "MediaPlayer.pause failed", it) }
+            send(mapOf("event" to "playing", "value" to playingNow()))
+        }
+
+        override fun isPlaying(): Boolean = playingNow()
         override fun seekTo(ms: Long) { player?.seekTo(ms.toInt()) }
         override fun positionMs() = try {
             player?.currentPosition?.toLong() ?: 0L
@@ -596,6 +687,7 @@ class StbSurfacePlayerView(
 
         override fun play() { player?.play() }
         override fun pause() { player?.pause() }
+        override fun isPlaying(): Boolean = player?.isPlaying == true
         override fun seekTo(ms: Long) { player?.seekTo(ms) }
         override fun positionMs() = player?.currentPosition ?: 0L
         override fun durationMs(): Long {
@@ -611,6 +703,22 @@ class StbSurfacePlayerView(
 
     private companion object {
         const val STATS_INTERVAL_MS = 30_000L
+
+        /**
+         * Ceiling for the OPEN phase — fetching and parsing the source, before
+         * it reports ready. Deliberately generous: a slow VOD fetch on a weak
+         * box uplink is not a wedged decoder, and an open that truly fails
+         * raises an error rather than going quiet. This only has to stop a
+         * source that neither becomes ready nor errors from hanging forever.
+         */
+        const val OPEN_CEILING_MS = 60_000L
+
+        /**
+         * Hard cap from open() to the first frame, whatever the re-arms say.
+         * Guarantees the fallback still happens on a stream that keeps looking
+         * busy without ever drawing.
+         */
+        const val TOTAL_CEILING_MS = 90_000L
 
         /** Known-good path — give the platform parser room to commit. */
         const val MP_FIRST_FRAME_MS = 15_000L
