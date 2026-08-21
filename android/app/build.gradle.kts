@@ -35,7 +35,7 @@ val isStbRelease = gradle.startParameter.taskNames.any {
 
 android {
     namespace = "com.fndtv.videoplayer"
-    compileSdk = 35  // Latest Android API level (Android 15)
+    compileSdk = 36  // Latest Android API level (Android 15)
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -58,7 +58,7 @@ android {
     defaultConfig {
         applicationId = "com.fndtv.videoplayer"
         minSdk = flutter.minSdkVersion  // Android 5.0 (Lollipop) - good compatibility
-        targetSdk = 35  // Latest Android API level
+        targetSdk = 36  // Latest Android API level
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
