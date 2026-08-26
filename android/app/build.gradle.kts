@@ -16,7 +16,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.fndtv.videoplayer"
-    compileSdk = 35  // Latest Android API level (Android 15)
+    compileSdk = 36  // Latest Android API level (Android 16)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -31,7 +31,7 @@ android {
     defaultConfig {
         applicationId = "com.qbc.android.fndtvchannel.mobile"
         minSdk = flutter.minSdkVersion  // Android 5.0 (Lollipop) - good compatibility
-        targetSdk = 35  // Latest Android API level
+        targetSdk = 36  // Latest Android API level
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
