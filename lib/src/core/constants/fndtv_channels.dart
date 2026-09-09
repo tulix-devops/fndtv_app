@@ -18,7 +18,7 @@ import 'package:fndtv/src/data/models/content/source_model.dart';
 /// Spoken language of a channel.
 enum FndtvLanguage {
   french('French', 'fr', 'FR'),
-  english('English', 'en', 'GB'),
+  english('English', 'en', 'US'),
   spanish('Spanish', 'sp', 'ES');
 
   const FndtvLanguage(this.label, this.code, this.countryCode);

@@ -1,7 +1,7 @@
 ﻿name: fndtv
 description: "A new Flutter project."
 publish_to: "none"
-version: 5.0.6+6
+version: 5.0.8+8
 
 environment:
   sdk: ">=3.2.2 <4.0.0"
@@ -63,11 +63,10 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/img/main_logo_transparent.png"
-  remove_alpha_ios: true
+  image_path_ios: "assets/img/app_icon_ios.png"
   background_color: "#A83734"
   adaptive_icon_background: "#A83734"
   adaptive_icon_foreground: "assets/img/app_icon_foreground.png"
-  background_color_ios: "#A83734"
 
 dev_dependencies:
   flutter_test:
