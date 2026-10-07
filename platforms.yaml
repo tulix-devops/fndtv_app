@@ -1,0 +1,26 @@
+# Platform readiness declared by the team. Read by tools/portfolio-report (agent-team).
+# status: dev | verified | submitted | live | retired
+# Optional per platform: verified: YYYY-MM-DD, verified-on: <device>, store-id: <id>, note: <one line>
+# SEEDED 2026-09-06 from inference (feat/tv_version); drop "seeded: true" once a human confirms a status.
+# Convention: agent-team/knowledge/shared/platform-declarations.md
+platforms:
+  android:
+    status: dev
+    seeded: true
+    note: inferred configured (android/ folder; release keystore wired in build.gradle)
+  ios:
+    status: dev
+    seeded: true
+    note: inferred configured (ios/ folder; DEVELOPMENT_TEAM set in Xcode project)
+  android-tv:
+    status: dev
+    seeded: true
+    note: inferred scaffolded (touchscreen not required in AndroidManifest; branch name "feat/tv_version")
+  stb:
+    status: dev
+    seeded: true
+    note: inferred configured (gradle flavor "stb")
+  web:
+    status: dev
+    seeded: true
+    note: inferred scaffolded (web/ folder)

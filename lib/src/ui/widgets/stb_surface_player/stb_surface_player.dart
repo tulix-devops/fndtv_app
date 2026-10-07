@@ -548,6 +548,10 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
           creationParams: <String, dynamic>{
             'url': widget.link,
             'autoplay': true,
+            // Decides what the native side does when the box wakes and the
+            // surface is re-created: archive resumes at the position it slept
+            // at, live goes back to the live edge.
+            'isLive': _isLive,
           },
           creationParamsCodec: const StandardMessageCodec(),
           onFocus: () => params.onFocusChanged(true),
