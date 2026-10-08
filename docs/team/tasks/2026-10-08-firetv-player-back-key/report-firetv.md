@@ -119,6 +119,26 @@ checked on a box. The two post-review additions (app_scaffold KeyDown-only,
 radio string) are 6 lines, no security surface — security checklist walked by
 the dev: no input parsing, network, storage, secrets or permissions touched.
 
+## Follow-up in the same task: keep the screen awake (user-requested)
+Nothing kept a TV awake during playback: `WakelockPlus` was only used by the
+two PHONE player screens, and video_player_android 2.8.15 has no
+keep-screen-on code — so Fire TV's screensaver/sleep would cut into long live
+viewing. `AppVideoPlayer` now holds the wake lock only while
+`controller.value.isPlaying`, releases it on pause, and on dispose RESTORES the
+state it found (read via `WakelockPlus.enabled` in `initState`, before any
+change) — the phone channel page holds its own wake lock while this full-screen
+player sits on top of it, so an unconditional disable would have switched that
+off. Radio counts as playing, so the TV stays awake on the now-playing screen.
+Tests: 3 more (fake `WakelockPlusPlatformInterface`, new dev dep already locked
+at 1.2.3): on while playing / off after leaving; off when paused / on when
+resumed; a prior wake lock is restored. 2 fail on the code without the change.
+Suite 131/131, analyze at baseline. Device (emulator-5554, WPALive_TV):
+`dumpsys window` flag on the app window — Home: no KEEP_SCREEN_ON; playing:
+KEEP_SCREEN_ON; paused: none; resumed: KEEP_SCREEN_ON; after Back: none
+(screenshots W1, W2). Not independently reviewed (small diff; security
+checklist walked by the dev — no input, network, storage, secrets; WAKE_LOCK
+permission already in the manifest).
+
 ## Device verification
 Android TV emulator `emulator-5558` (WPALive_TV AVD: 1920x1080 @320, API 36,
 leanback), `normal` debug build with all changes. Every key press was guarded

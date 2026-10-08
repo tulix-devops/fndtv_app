@@ -91,6 +91,8 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   # Lets widget tests run the real AppVideoPlayer against a fake platform.
   video_player_platform_interface: ^6.6.0
+  # Lets widget tests observe the player's keep-screen-awake.
+  wakelock_plus_platform_interface: ^1.2.3
 
 flutter:
   default-flavor: normal

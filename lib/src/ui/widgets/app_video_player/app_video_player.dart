@@ -10,6 +10,7 @@ import 'package:fndtv/src/ui/widgets/app_video_player/screens/live_fullscreen.da
 import 'package:fndtv/src/ui/widgets/app_video_player/screens/vod_fullscreen.dart';
 import 'package:fndtv/src/ui/widgets/app_video_player/widgets/radio_now_playing.dart';
 import 'package:video_player/video_player.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 part 'video_button.dart';
 part 'video_controls.dart';
@@ -43,9 +44,21 @@ class _AppVideoPlayerState extends State<AppVideoPlayer> {
 
   final ValueNotifier<bool> _isLoading = ValueNotifier<bool>(true);
 
+  /// Keep-screen-awake, held only while video actually plays. Nothing else
+  /// keeps a TV awake here — video_player does not — so without it Fire TV's
+  /// screensaver, then sleep, cut into long live viewing.
+  bool _wakelockHeld = false;
+
+  /// The keep-awake state from before this player opened, asked for before we
+  /// change it (platform calls answer in order). A phone channel page holds
+  /// its own wake lock while this full-screen player sits on top of it, so on
+  /// leaving we restore that state rather than switching it off.
+  late final Future<bool> _wakelockBefore;
+
   @override
   void initState() {
     super.initState();
+    _wakelockBefore = WakelockPlus.enabled;
     print(widget.video.sources);
     context.read<VideoPlayerCubit>().reset();
     isLive = widget.isLive;
@@ -101,6 +114,12 @@ class _AppVideoPlayerState extends State<AppVideoPlayer> {
     } else if (isBuffering) {
       _handleBuffering();
     }
+
+    // Awake while playing; a paused screen may sleep like any other.
+    if (isPlaying != _wakelockHeld) {
+      _wakelockHeld = isPlaying;
+      WakelockPlus.toggle(enable: isPlaying);
+    }
   }
 
   void _addPlayerEventListeners() {
@@ -117,6 +136,7 @@ class _AppVideoPlayerState extends State<AppVideoPlayer> {
 
   @override
   void dispose() {
+    _wakelockBefore.then((on) => WakelockPlus.toggle(enable: on));
     _isLoading.dispose();
     removeListeners();
 

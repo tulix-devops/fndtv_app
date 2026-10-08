@@ -14,6 +14,20 @@ import 'package:fndtv/src/ui/widgets/app_video_player/screens/vod_fullscreen.dar
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ui_kit/ui_kit.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
+import 'package:wakelock_plus_platform_interface/wakelock_plus_platform_interface.dart';
+
+/// Records the keep-screen-awake state the app asks for.
+class _FakeWakelock extends WakelockPlusPlatformInterface {
+  bool on = false;
+
+  @override
+  Future<void> toggle({required bool enable}) async => on = enable;
+
+  @override
+  Future<bool> get enabled async => on;
+}
+
+final _wakelock = _FakeWakelock();
 
 /// The remote's Back contract for the normal-flavor player (Fire TV, Android
 /// TV, phones): schedule open → Back closes it; otherwise Back leaves the
@@ -168,6 +182,47 @@ void main() {
   setUpAll(() {
     GoogleFonts.config.allowRuntimeFetching = false;
     VideoPlayerPlatform.instance = _InstantVideoPlatform();
+    WakelockPlusPlatformInterface.instance = _wakelock;
+  });
+  setUp(() => _wakelock.on = false);
+
+  // Fire TV's screensaver (and later sleep) must not cut into playback — the
+  // player keeps the screen awake while video is actually playing.
+  group('keep screen awake', () {
+    testWidgets('on while playing, released on leaving', (tester) async {
+      await _openPlayer(tester, ContentType.television);
+      expect(_wakelock.on, isTrue, reason: 'playing');
+
+      await tester.binding.handlePopRoute();
+      await _settle(tester);
+      expect(_wakelock.on, isFalse, reason: 'left the player');
+      await _drainTimers(tester);
+    });
+
+    testWidgets('released while paused, back on when resumed', (tester) async {
+      await _openPlayer(tester, ContentType.television);
+      await tester.sendKeyEvent(LogicalKeyboardKey.select); // pause
+      await _settle(tester);
+      expect(_wakelock.on, isFalse, reason: 'paused');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.select); // play
+      await _settle(tester);
+      expect(_wakelock.on, isTrue, reason: 'resumed');
+      await _drainTimers(tester);
+    });
+
+    testWidgets('leaving restores a wake lock the screen behind held',
+        (tester) async {
+      // The phone channel page holds its own wake lock while the full-screen
+      // player is on top; closing the player must not switch it off.
+      _wakelock.on = true;
+      await _openPlayer(tester, ContentType.television);
+
+      await tester.binding.handlePopRoute();
+      await _settle(tester);
+      expect(_wakelock.on, isTrue);
+      await _drainTimers(tester);
+    });
   });
 
   for (final type in [
