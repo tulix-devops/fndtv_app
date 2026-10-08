@@ -168,6 +168,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sectionSchedule => 'Schedule';
 
   @override
+  String get todaysSchedule => 'Today\'s Schedule';
+
+  @override
   String get brandRadio => 'FNDTV Radio';
 
   @override

@@ -412,6 +412,12 @@ abstract class AppLocalizations {
   /// **'Schedule'**
   String get sectionSchedule;
 
+  /// No description provided for @todaysSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s Schedule'**
+  String get todaysSchedule;
+
   /// No description provided for @brandRadio.
   ///
   /// In en, this message translates to:

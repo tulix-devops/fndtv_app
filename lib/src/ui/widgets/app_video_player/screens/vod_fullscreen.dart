@@ -1,4 +1,5 @@
-﻿import 'package:commons/commons.dart';
+﻿import 'package:app_localization/app_localization.dart';
+import 'package:commons/commons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -34,7 +35,7 @@ class _VodFullScreenState extends State<VodFullScreen> {
   late final FocusNode arrowBackFocus;
 
   /// Focus target for the schedule sheet itself — holds focus while the list
-  /// loads (so the Back key routes to it) before the first card autofocuses.
+  /// loads, before the first card autofocuses.
   late final FocusNode _scheduleFocus;
 
   ({int selectedPage, int selectedItemIndex})? selectedLinkIndexes;
@@ -101,6 +102,10 @@ class _VodFullScreenState extends State<VodFullScreen> {
     _scheduleFocus = FocusNode();
     playPauseFocus = FocusNode(
       onKeyEvent: (node, event) {
+        // Back belongs to the PopScope in `build`; see the note there.
+        if (event.logicalKey == LogicalKeyboardKey.goBack) {
+          return KeyEventResult.ignored;
+        }
         bool isInitialized = widget.controller.value.isInitialized;
         if (event is KeyDownEvent || event is KeyRepeatEvent) {
           final Duration currentPosition = widget.controller.value.position;
@@ -118,6 +123,20 @@ class _VodFullScreenState extends State<VodFullScreen> {
                 !isSeasonsOpen) {
               _openDvr();
             }
+            return KeyEventResult.handled;
+          }
+
+          // Like Down, the first press only reveals the controls (with the
+          // usual auto-hide); the next moves to ←. Explicit, because
+          // directional traversal does not
+          // reliably cross between these two Positioned children. Moving
+          // focus only while the controls are already up also keeps clear of
+          // the visibility listener below, which would otherwise pull focus
+          // straight back to play/pause.
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.arrowUp) {
+            cubit.handleVisibility();
+            if (wasVisible) arrowBackFocus.requestFocus();
             return KeyEventResult.handled;
           }
 
@@ -139,22 +158,15 @@ class _VodFullScreenState extends State<VodFullScreen> {
             );
             return KeyEventResult.handled;
           }
-          if (event.logicalKey == LogicalKeyboardKey.goBack) {
-            arrowBackFocus.requestFocus();
-            return KeyEventResult.ignored;
-          }
         }
         return KeyEventResult.ignored;
       },
     );
     arrowBackFocus = FocusNode(
       onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent) return KeyEventResult.ignored;
-        if (isSeasonsOpen) {
-          if (event.logicalKey == LogicalKeyboardKey.goBack) {
-            _closeDvr();
-            return KeyEventResult.handled;
-          }
+        if (event is! KeyDownEvent ||
+            isSeasonsOpen ||
+            event.logicalKey == LogicalKeyboardKey.goBack) {
           return KeyEventResult.ignored;
         }
         context.read<VideoPlayerCubit>().handleVisibility();
@@ -207,60 +219,71 @@ class _VodFullScreenState extends State<VodFullScreen> {
         final isLiveTv = widget.contentType == ContentType.television;
         // On-demand (VOD) content has a fixed duration, so it gets a scrub bar.
         final isVod = widget.contentType == ContentType.dvr;
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            // Keep the video undimmed while the schedule sheet is open so the
-            // layout behind it stays readable.
-            if (state.isVisible && !isSeasonsOpen) const BlackBackground(),
-            if (!isSeasonsOpen) ...[
-              Positioned(
-                left: 60,
-                top: 20,
-                child: VideoButton(
-                  onPressed: (ctx) => context.pop(),
-                  icon: Assets.arrowLeft,
-                  focusNode: arrowBackFocus,
-                ),
-              ),
-              Positioned(
-                left: 60,
-                right: 10,
-                bottom: 60,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    VideoButton(
-                      onPressed: (context) {
-                        _togglePlayPause(context);
-                        context.read<VideoPlayerCubit>().handleVisibility();
-                      },
-                      icon: _playIcon(),
-                      focusNode: playPauseFocus,
-                    ),
-                  ],
-                ),
-              ),
-              // Bottom hint that a schedule is available — press Down to open.
-              // Live TV only (radio and VOD have no schedule).
-              if (isLiveTv && state.isVisible)
-                const Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 14,
-                  child: IgnorePointer(child: _ScheduleHint()),
-                ),
-              // VOD progress / scrub bar — rewind & fast-forward with ◀ / ▶.
-              if (isVod && state.isVisible)
+        // Back is decided here and ONLY here: the schedule sheet closes first,
+        // otherwise the route pops and the viewer leaves the player. Android
+        // turns an unhandled Back key into this pop, so no focus node in the
+        // player may mark goBack handled — that is what trapped remote-only
+        // viewers (Amazon's Fire TV review requires Back to leave).
+        return PopScope(
+          canPop: !isSeasonsOpen,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop && isSeasonsOpen) _closeDvr();
+          },
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Keep the video undimmed while the schedule sheet is open so the
+              // layout behind it stays readable.
+              if (state.isVisible && !isSeasonsOpen) const BlackBackground(),
+              if (!isSeasonsOpen) ...[
                 Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 18,
-                  child: getVodSeekbar(context),
+                  left: 60,
+                  top: 20,
+                  child: VideoButton(
+                    onPressed: (ctx) => context.pop(),
+                    icon: Assets.arrowLeft,
+                    focusNode: arrowBackFocus,
+                  ),
                 ),
+                Positioned(
+                  left: 60,
+                  right: 10,
+                  bottom: 60,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      VideoButton(
+                        onPressed: (context) {
+                          _togglePlayPause(context);
+                          context.read<VideoPlayerCubit>().handleVisibility();
+                        },
+                        icon: _playIcon(),
+                        focusNode: playPauseFocus,
+                      ),
+                    ],
+                  ),
+                ),
+                // Bottom hint that a schedule is available — press Down to open.
+                // Live TV only (radio and VOD have no schedule).
+                if (isLiveTv && state.isVisible)
+                  const Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 14,
+                    child: IgnorePointer(child: _ScheduleHint()),
+                  ),
+                // VOD progress / scrub bar — rewind & fast-forward with ◀ / ▶.
+                if (isVod && state.isVisible)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 18,
+                    child: getVodSeekbar(context),
+                  ),
+              ],
+              if (isSeasonsOpen) _buildScheduleSheet(context),
             ],
-            if (isSeasonsOpen) _buildScheduleSheet(context),
-          ],
+          ),
         );
       },
     );
@@ -277,14 +300,6 @@ class _VodFullScreenState extends State<VodFullScreen> {
       bottom: 0,
       child: Focus(
         focusNode: _scheduleFocus,
-        onKeyEvent: (node, event) {
-          if (event is KeyDownEvent &&
-              event.logicalKey == LogicalKeyboardKey.goBack) {
-            _closeDvr();
-            return KeyEventResult.handled;
-          }
-          return KeyEventResult.ignored;
-        },
         child: FocusTraversalGroup(
           policy: ReadingOrderTraversalPolicy(),
           child: Container(
@@ -317,7 +332,7 @@ class _VodFullScreenState extends State<VodFullScreen> {
                             color: Color(0xFFA83734), size: 22),
                         const SizedBox(width: 10),
                         Text(
-                          "Today's Schedule",
+                          context.l.todaysSchedule,
                           style: GoogleFonts.sora(
                             color: Colors.white,
                             fontSize: 18,
@@ -356,7 +371,7 @@ class _VodFullScreenState extends State<VodFullScreen> {
           children: [
             const Icon(Icons.error_outline, color: Colors.white38, size: 34),
             const SizedBox(height: 8),
-            Text('Could not load schedule',
+            Text(context.l.scheduleLoadError,
                 style: GoogleFonts.sora(color: Colors.white54, fontSize: 14)),
             const SizedBox(height: 10),
             TextButton(
@@ -367,7 +382,7 @@ class _VodFullScreenState extends State<VodFullScreen> {
                 });
                 _fetchDvr();
               },
-              child: Text('Retry', style: TextStyle(color: colors.accent)),
+              child: Text(context.l.retry, style: TextStyle(color: colors.accent)),
             ),
           ],
         ),
@@ -375,7 +390,7 @@ class _VodFullScreenState extends State<VodFullScreen> {
     }
     if (_programs.isEmpty) {
       return Center(
-        child: Text('No programs today',
+        child: Text(context.l.noSchedule,
             style: GoogleFonts.sora(color: Colors.white38, fontSize: 14)),
       );
     }
@@ -479,7 +494,7 @@ class _ScheduleHintState extends State<_ScheduleHint>
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Schedule',
+            context.l.sectionSchedule,
             style: GoogleFonts.sora(
               color: color,
               fontSize: 13,
@@ -669,7 +684,7 @@ class _DvrProgramCardState extends State<_DvrProgramCard> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              'LIVE',
+                              context.l.badgeLive,
                               style: GoogleFonts.sora(
                                 color: Colors.white,
                                 fontSize: 10,

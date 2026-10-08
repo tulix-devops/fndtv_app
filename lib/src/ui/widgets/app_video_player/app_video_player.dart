@@ -1,6 +1,4 @@
-﻿import 'dart:async';
-
-import 'package:commons/commons.dart';
+﻿import 'package:commons/commons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -141,40 +139,38 @@ class _AppVideoPlayerState extends State<AppVideoPlayer> {
 
     // Use Chewie for inline player (Home screen)
 
-    // Use custom controls for fullscreen player
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (res, _) async {},
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          VideoPlayer(_videoPlayerController!),
-          ValueListenableBuilder<bool>(
-            valueListenable: _isLoading,
-            builder: (context, isLoading, _) {
-              return isLoading
-                  ? Container(
-                      color: Colors.black,
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          color: context.uiColors.primary,
-                        ),
+    // Use custom controls for fullscreen player. Back is decided by the
+    // PopScope in [VodFullScreen] — a PopScope(canPop: false) here used to
+    // swallow every pop, which trapped remote-only viewers in the player.
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        VideoPlayer(_videoPlayerController!),
+        ValueListenableBuilder<bool>(
+          valueListenable: _isLoading,
+          builder: (context, isLoading, _) {
+            return isLoading
+                ? Container(
+                    color: Colors.black,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: context.uiColors.primary,
                       ),
-                    )
-                  : const SizedBox.shrink();
-            },
-          ),
-          _CustomPlayerControl(
-            updateVideoType: _changeVideoType,
-            isLive: isLive,
-            controller: _videoPlayerController!,
-            video: widget.video,
-            updateVideoController: _updateVideoPlayerController,
-            contentType: widget.contentType,
-            showBackButton: widget.showBackButton,
-          ),
-        ],
-      ),
+                    ),
+                  )
+                : const SizedBox.shrink();
+          },
+        ),
+        _CustomPlayerControl(
+          updateVideoType: _changeVideoType,
+          isLive: isLive,
+          controller: _videoPlayerController!,
+          video: widget.video,
+          updateVideoController: _updateVideoPlayerController,
+          contentType: widget.contentType,
+          showBackButton: widget.showBackButton,
+        ),
+      ],
     );
   }
 }
@@ -210,20 +206,9 @@ class _CustomPlayerControlState extends State<_CustomPlayerControl> {
   void initState() {
     super.initState();
 
-    _inkFocus = FocusNode(
-      skipTraversal: true,
-      onKeyEvent: (node, event) {
-        if (event.logicalKey == LogicalKeyboardKey.goBack) {
-          Future.delayed(const Duration(milliseconds: 200), () {
-            context.read<VideoPlayerCubit>().handleVisibility();
-          });
-
-          return KeyEventResult.handled;
-        }
-
-        return KeyEventResult.ignored;
-      },
-    );
+    // No Back handling here: marking goBack handled stops Android from turning
+    // it into the route pop that [VodFullScreen]'s PopScope decides on.
+    _inkFocus = FocusNode(skipTraversal: true);
     _inkFocus.requestFocus();
   }
 

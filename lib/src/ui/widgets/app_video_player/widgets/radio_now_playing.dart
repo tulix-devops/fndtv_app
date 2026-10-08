@@ -1,3 +1,4 @@
+import 'package:app_localization/app_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fndtv/src/core/audio/radio_metadata.dart';
@@ -64,7 +65,7 @@ class RadioNowPlaying extends StatelessWidget {
                         const Icon(Icons.circle, color: Colors.white, size: 8),
                         const SizedBox(width: 7),
                         Text(
-                          'ON AIR',
+                          context.l.badgeOnAir,
                           style: GoogleFonts.sora(
                             color: Colors.white,
                             fontSize: 12,

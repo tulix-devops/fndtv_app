@@ -85,6 +85,11 @@ class AppScaffoldState extends State<AppScaffold> {
           return KeyEventResult.ignored;
         }
         if (event.logicalKey == LogicalKeyboardKey.goBack) {
+          // Act on the press only. One Back press is a down AND an up: acting
+          // on both popped twice on pages without the rail, and the up of the
+          // press that just closed the full-screen player landed here and
+          // opened the rail. The up stays `handled` so nothing else sees it.
+          if (event is! KeyDownEvent) return KeyEventResult.handled;
           Future.delayed(const Duration(milliseconds: 200), () {
             if (widget.hasNavbar) {
               setState(() {
