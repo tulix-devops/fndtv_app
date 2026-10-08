@@ -226,6 +226,10 @@ class _SplashPageState extends State<SplashPage> {
     // MaterialApp.builder — do it before the first real route is shown, or the
     // UI would visibly jump from 100% to the saved value.
     await StbScreenSizeController.instance.load(storage);
+    // Restore the last resolved timezone offset BEFORE the first route: a box
+    // that is offline at boot then still renders correct times from what it
+    // learned last run, instead of showing the wrong hour until a lookup lands.
+    await StbClock.instance.load(storage);
     // Storage is ready — load the persisted UI locale (French by default).
     context.read<LocalizationCubit>().getLocale();
 
@@ -239,9 +243,19 @@ class _SplashPageState extends State<SplashPage> {
     // Fire-and-forget; all no-op on the normal flavor / without root.
     if (StbSystemService.isStb) {
       final stb = StbSystemService();
-      unawaited(stb.syncTimezone());
+      // Timezone. Driven by StbClock, not a single syncTimezone() call: we are
+      // the launcher, so we start before the box has a network — a box in the
+      // field got its DHCP lease ELEVEN SECONDS after the app had already tried
+      // all three geolocation providers and given up, and nothing re-fired it,
+      // so the zone stayed wrong until the next reboot. The clock retries until
+      // it lands and refreshes for DST.
+      unawaited(StbClock.instance.start(storage));
       unawaited(stb.logDiagnostics());
-      unawaited(stb.runStartupMaintenance());
+      // Kiosk takeover. Driven by the guard, not called directly: it has to
+      // retry (root and PackageManager are still settling this early — we are
+      // the launcher, so we start before them) and re-assert on resume. It
+      // outlives this page deliberately; the splash is replaced once boot ends.
+      unawaited(StbKioskGuard.instance.start());
 
       // Storage is initialized above, so it's safe to restore the persisted
       // kiosk-lock state now and begin the MDM check-in poll loop (which

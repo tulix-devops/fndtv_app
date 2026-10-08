@@ -26,6 +26,7 @@ import java.net.NetworkInterface
 import java.net.URL
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * STB-only native bridge (adopted from the reference native FNDTV launcher).
@@ -107,6 +108,8 @@ class StbBridge(private val context: Context) {
                 // §1 kiosk
                 "isDeviceOwner" -> isDeviceOwner()
                 "defaultLauncher" -> defaultLauncher()
+                "homeCandidates" -> homeCandidates()
+                "kioskDiagnostics" -> kioskDiagnostics()
                 "setDefaultLauncher" -> setDefaultLauncher()
                 "setupDeviceOwner" -> setupDeviceOwner()
                 "uninstallPackages" ->
@@ -218,18 +221,36 @@ class StbBridge(private val context: Context) {
         "/debug_ramdisk/su"
     )
 
+    /** Set once a root shell has actually been granted. Negatives are never
+     *  cached: a grant can arrive later in the boot, and the guard retries. */
+    @Volatile
+    private var rootGranted: Boolean = false
+
     /**
-     * Root detection. `which su` alone gives false negatives on boxes where the
-     * su binary isn't on PATH (common on Rockchip), so check known locations
-     * first, then `which`, then actually try to open a root shell (`id`).
+     * Root detection — a GRANTED root shell, not a binary on disk.
+     *
+     * This used to return true the moment it found `/system/bin/su`. These boxes
+     * ship that binary whether or not the superuser layer will hand it to *us*,
+     * so a box that denied every single command still reported `root=true`. The
+     * maintenance summary then showed a pile of independent failures with
+     * nothing tying them together, when the cause was one thing for all of them.
+     *
+     * The only honest test is to open a root shell and look at the uid.
      */
     private fun isRootAvailable(): Boolean {
-        if (suBinaryPaths.any { File(it).exists() }) return true
-        try {
-            if (Runtime.getRuntime().exec(arrayOf("which", "su")).waitFor() == 0) return true
-        } catch (_: Throwable) {
+        if (rootGranted) return true
+        val out = rootIdOutput()
+        val granted = out.contains("uid=0")
+        if (granted) {
+            rootGranted = true
+        } else {
+            Log.w(
+                tag,
+                "root NOT granted — su binary on disk=${suBinaryPaths.any { File(it).exists() }}, " +
+                    "id=[${out.take(200)}]"
+            )
         }
-        return rootIdOutput().contains("uid=0")
+        return granted
     }
 
     /** Runs `id` through su and returns its output (uid=0(root)…), or "" if root
@@ -238,50 +259,99 @@ class StbBridge(private val context: Context) {
 
     // ─── §7 timezone sync ─────────────────────────────────────────────────────
 
+    /** A resolved zone: IANA id plus the CURRENT offset from UTC, in seconds. */
+    private data class Zone(val id: String, val offsetSeconds: Int)
+
     /**
-     * Detects the timezone from public-IP geolocation and, if root is available,
-     * sets the system timezone. Returns the detected timezone id, or null.
+     * Detects the box's timezone from public-IP geolocation and, when root
+     * allows, applies it to the system. Returns `{id, offsetSeconds, applied}`,
+     * or null when nothing could be resolved (offline).
+     *
+     * The OFFSET is the point of this, not the id. Applying the zone needs root
+     * (`setprop persist.sys.timezone`), and on boxes where `su` is refused the
+     * system zone stays wrong forever — every schedule time then renders through
+     * a `.toLocal()` that is an hour or two out, which is the EPG being "off".
+     * Handing the offset to Dart lets the app render correct local times on a
+     * box whose system zone we are never allowed to fix.
      */
-    private fun syncTimezone(): String? {
-        val tz = fetchTimezoneFromInternet() ?: return null
+    private fun syncTimezone(): Map<String, Any?>? {
+        val zone = fetchTimezoneFromInternet() ?: return null
+        var applied = false
         try {
             if (isRootAvailable()) {
                 val code = runSu(
-                    "setprop persist.sys.timezone $tz",
-                    "am broadcast -a android.intent.action.TIMEZONE_CHANGED --es time-zone $tz"
+                    "setprop persist.sys.timezone ${zone.id}",
+                    "am broadcast -a android.intent.action.TIMEZONE_CHANGED --es time-zone ${zone.id}"
                 )
-                Log.d(tag, "syncTimezone set $tz via root, exit=$code")
+                applied = code == 0
+                Log.d(tag, "syncTimezone set ${zone.id} via root, exit=$code")
             } else {
-                Log.w(tag, "syncTimezone: root unavailable, detected $tz (not applied)")
+                Log.w(tag, "syncTimezone: no root — detected ${zone.id} " +
+                    "(offset ${zone.offsetSeconds}s), NOT applied to the system; " +
+                    "the app renders through the offset instead")
             }
         } catch (t: Throwable) {
             Log.e(tag, "syncTimezone apply failed", t)
         }
-        return tz
+        return mapOf(
+            "id" to zone.id,
+            "offsetSeconds" to zone.offsetSeconds,
+            "applied" to applied,
+        )
     }
 
-    private fun fetchTimezoneFromInternet(): String? {
-        data class Provider(val url: String, val parse: (String) -> String?)
+    /**
+     * Parses "+02:00" / "+0200" / "0200" into seconds. Providers disagree on the
+     * format, and getting this wrong is a silent one-hour EPG error rather than
+     * a visible failure — so unparseable input returns null and we fall through
+     * to the next provider instead of guessing zero.
+     */
+    private fun parseUtcOffset(raw: String?): Int? {
+        val s = raw?.trim()?.replace(":", "") ?: return null
+        val m = Regex("^([+-])?(\\d{2})(\\d{2})$").find(s) ?: return null
+        val (sign, h, min) = m.destructured
+        val seconds = h.toInt() * 3600 + min.toInt() * 60
+        return if (sign == "-") -seconds else seconds
+    }
+
+    private fun fetchTimezoneFromInternet(): Zone? {
+        data class Provider(val url: String, val parse: (String) -> Zone?)
         val providers = listOf(
             Provider("https://ipapi.co/json/") {
-                JSONObject(it).optString("timezone").takeIf { s -> s.isNotBlank() }
+                val root = JSONObject(it)
+                val id = root.optString("timezone").takeIf { s -> s.isNotBlank() }
+                val off = parseUtcOffset(root.optString("utc_offset"))
+                if (id != null && off != null) Zone(id, off) else null
             },
             Provider("https://ipwho.is/") {
                 val root = JSONObject(it)
-                root.optJSONObject("timezone")?.optString("id")?.takeIf { s -> s.isNotBlank() }
+                val tzObj = root.optJSONObject("timezone")
+                val id = tzObj?.optString("id")?.takeIf { s -> s.isNotBlank() }
                     ?: root.optString("timezone").takeIf { s -> s.isNotBlank() }
+                // ipwho.is gives the offset in seconds directly.
+                val off = tzObj?.let { o ->
+                    if (o.has("offset")) o.optInt("offset") else parseUtcOffset(o.optString("utc"))
+                }
+                if (id != null && off != null) Zone(id, off) else null
             },
             Provider("https://worldtimeapi.org/api/ip") {
-                JSONObject(it).optString("timezone").takeIf { s -> s.isNotBlank() }
+                val root = JSONObject(it)
+                val id = root.optString("timezone").takeIf { s -> s.isNotBlank() }
+                // raw_offset excludes DST; dst_offset carries it.
+                val off = if (root.has("raw_offset")) {
+                    root.optInt("raw_offset") + root.optInt("dst_offset", 0)
+                } else {
+                    parseUtcOffset(root.optString("utc_offset"))
+                }
+                if (id != null && off != null) Zone(id, off) else null
             }
         )
         for (p in providers) {
             try {
-                val body = httpGet(p.url)
-                val tz = p.parse(body)
-                if (!tz.isNullOrBlank()) {
-                    Log.d(tag, "timezone from ${p.url}: $tz")
-                    return tz
+                val zone = p.parse(httpGet(p.url))
+                if (zone != null) {
+                    Log.d(tag, "timezone from ${p.url}: ${zone.id} (${zone.offsetSeconds}s)")
+                    return zone
                 }
             } catch (t: Throwable) {
                 Log.w(tag, "timezone provider failed: ${p.url}", t)
@@ -370,31 +440,114 @@ class StbBridge(private val context: Context) {
     }
 
     /**
-     * Sets this app (MainActivity) as the default HOME launcher via root.
-     * Disables the current competing launcher first (e.g. Google TV Home) so
-     * `set-home-activity` actually sticks — the box-verified approach
-     * (`pm disable-user --user 0 com.google.android.tvlauncher`). Disabling
-     * (not uninstalling) is safer for a system launcher and reversible.
+     * Packages that must never be uninstalled or disabled, whatever they
+     * declare. `com.android.settings` is on the list because it hosts
+     * `FallbackHome` — the activity the framework falls back to when no real
+     * launcher resolves. Disable it and a box with no other launcher has
+     * nothing at all to show.
+     */
+    private val protectedPackages: Set<String>
+        get() = setOf(
+            "android",
+            "com.android.systemui",
+            "com.android.settings",
+            "com.android.tv.settings",
+            "com.android.provision",
+            context.packageName,
+        )
+
+    /**
+     * Every OTHER package that can currently answer the HOME intent — i.e. every
+     * app that can appear in the "Use ___ as Home" chooser and steal the box.
+     *
+     * Discovered, not listed. A static list only ever covered the launchers we
+     * happened to have seen (SmartLauncher, Google TV Home); firmware batches
+     * ship others, and the one we do not know about is exactly the one that wins
+     * the chooser. Disabled packages do not resolve, so an empty result is the
+     * precise definition of "nothing can take HOME from us".
+     *
+     * Read twice: PackageManager (subject to Android 11 package visibility, hence
+     * the `<queries>` block in the manifest) and, when we have it, the root shell,
+     * which sees everything regardless. The union is what we act on.
+     */
+    private fun homeCandidates(useRoot: Boolean = isRootAvailable()): List<String> {
+        val found = LinkedHashSet<String>()
+
+        try {
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            context.packageManager.queryIntentActivities(intent, 0).forEach {
+                val info = it.activityInfo ?: return@forEach
+                // FallbackHome is the framework's own no-launcher placeholder,
+                // not a competitor — and it lives in a protected package anyway.
+                if (info.name?.contains("FallbackHome") == true) return@forEach
+                found += info.packageName
+            }
+        } catch (t: Throwable) {
+            Log.w(tag, "homeCandidates: queryIntentActivities failed", t)
+        }
+
+        if (useRoot) {
+            val out = runSuCapture(
+                "cmd package query-activities -a android.intent.action.MAIN " +
+                    "-c android.intent.category.HOME --user 0",
+                "pm query-activities -a android.intent.action.MAIN " +
+                    "-c android.intent.category.HOME",
+            ).output
+            // Both `packageName=<pkg>` (verbose form) and `<pkg>/<class>` (brief
+            // form) appear depending on the Android version on the box.
+            Regex("packageName=([A-Za-z0-9_.]+)").findAll(out)
+                .forEach { found += it.groupValues[1] }
+            Regex("(?m)^\\s*([A-Za-z0-9_.]+)/[A-Za-z0-9_.]+\\s*$").findAll(out)
+                .forEach { found += it.groupValues[1] }
+        }
+
+        val protectedPkgs = protectedPackages
+        return found.filter { it.isNotBlank() && it !in protectedPkgs }
+    }
+
+    /**
+     * Points the HOME intent at this app.
+     *
+     * Deliberately does NOT touch the competing launchers any more — that has to
+     * happen BEFORE this runs, not after. Android drops a preferred-activity
+     * record as soon as the set of activities matching the intent differs from
+     * the set recorded when the preference was written, so uninstalling or
+     * disabling a launcher after calling `set-home-activity` invalidates the very
+     * preference it just wrote. That was the boot-to-boot oscillation: pinned on
+     * one boot, chooser on the next.
      */
     private fun setDefaultLauncher(): Boolean {
         val myPkg = context.packageName
         val component = "$myPkg/$myPkg.MainActivity"
-
-        val current = defaultLauncher()
-        val protectedPkgs =
-            setOf("android", "com.android.systemui", "com.android.settings", myPkg)
-        if (current != null && current !in protectedPkgs) {
-            val disabled = disablePackage(current)
-            Log.d(tag, "setDefaultLauncher: competing launcher=$current disabled=$disabled")
-        }
-
-        val code = runSu(
+        val res = runSuCapture(
+            // Android 10+ (and decisively by 12+) the default launcher is owned
+            // by RoleManager, NOT by the preferred-activity table. On a box
+            // whose firmware already installed its own launcher as the HOME
+            // role holder there is no preference to win and no chooser to
+            // answer — the incumbent has to be replaced. This is the lever that
+            // does that; `set-home-activity` alone left an Android 14 box
+            // booting straight into its stock launcher.
+            "cmd role add-role-holder android.app.role.HOME $myPkg",
+            "cmd role add-role-holder --user 0 android.app.role.HOME $myPkg",
+            // Pre-role boxes (and belt-and-braces everywhere else).
             "cmd package set-home-activity $component",
-            "pm set-home-activity $component"
+            "pm set-home-activity $component",
         )
-        val ok = code == 0 || defaultLauncher() == myPkg
-        Log.d(tag, "setDefaultLauncher: component=$component exit=$code -> $ok")
+        val ok = defaultLauncher() == myPkg
+        Log.d(
+            tag,
+            "setDefaultLauncher: component=$component -> $ok " +
+                "out=[${res.output.take(300)}]"
+        )
         return ok
+    }
+
+    /** Current holder of `android.app.role.HOME`, or null. Diagnostic only. */
+    private fun homeRoleHolder(): String? {
+        val out = runSuCapture("cmd role get-role-holders android.app.role.HOME").output
+        return out.lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.isNotEmpty() && it.contains('.') && !it.contains(' ') }
     }
 
     /**
@@ -436,45 +589,178 @@ class StbBridge(private val context: Context) {
     /** Last `dpm set-device-owner` output, surfaced in the maintenance summary. */
     private var lastDeviceOwnerOutput: String = ""
 
-    /** Uninstalls each package via root; returns those actually removed. */
-    private fun uninstallPackages(packages: List<String>): List<String> {
-        val removed = mutableListOf<String>()
-        for (p in packages) {
-            if (p.isBlank() || p == context.packageName) continue
-            // Do NOT pre-check with our PackageManager: Android 11+ package
-            // visibility hides other apps from us (no <queries>/QUERY_ALL_PACKAGES),
-            // so getPackageInfo throws NotFound and we'd wrongly skip installed
-            // apps. Root's shell sees everything — run pm uninstall and trust its
-            // "Success"/"Failure" output. (`-k --user 0` first: keeps data / works
-            // for system apps; then fallbacks.)
-            val res = runSuCapture(
-                "pm uninstall -k --user 0 $p",
-                "pm uninstall $p",
-                "pm uninstall --user 0 $p"
-            )
-            Log.d(tag, "uninstall $p -> exit=${res.exitCode} out=[${res.output.take(200)}]")
-            if (res.output.contains("Success", ignoreCase = true)) removed.add(p)
-        }
-        return removed
+    /**
+     * Whether [pkg] can still run for user 0 — installed AND not disabled.
+     *
+     * Read through root, never through our own PackageManager: Android 11
+     * package visibility hides almost everything from us, so a NameNotFound
+     * there would read as "already gone" and we would report removals that never
+     * happened. `pm list packages` filters by substring, so the match is made
+     * line-exact — otherwise `com.google.android.youtube` also matches
+     * `com.google.android.youtube.tv` and one of them is never touched.
+     */
+    private fun isPackageActive(pkg: String): Boolean {
+        val res = runSuCapture(
+            "pm list packages --user 0 $pkg",
+            "echo $MARKER",
+            "pm list packages -d --user 0 $pkg",
+        )
+        val parts = res.output.split(MARKER)
+        fun listed(block: String?) =
+            block?.lineSequence()?.any { it.trim() == "package:$pkg" } == true
+        return listed(parts.getOrNull(0)) && !listed(parts.getOrNull(1))
     }
 
     /**
-     * Disables (does NOT uninstall) components/packages that can't be removed
-     * but should be blocked — e.g. the TV Settings activity so the remote can't
-     * open system settings. `component` targets are `pkg/.Activity`; `package`
-     * targets are a bare package name.
+     * Makes [pkg] stop existing for user 0, as durably as root allows.
+     *
+     * Two levers, because neither alone is enough on these boxes:
+     *  - `pm uninstall --user 0` removes a preinstalled app for the current user
+     *    while the APK stays on /system (so a factory reset restores it). Some
+     *    firmware marks packages non-removable and refuses.
+     *  - `pm disable-user --user 0` cannot be refused, survives a reboot, and is
+     *    undone with a single `pm enable`.
+     *
+     * [preferDisable] picks the order. Competing launchers take the reversible
+     * route — disabling already stops them resolving HOME, which is all we need,
+     * and leaves the box's own launcher recoverable. The unwanted-app list is
+     * meant to be gone, so it uninstalls first.
+     *
+     * Returns "uninstalled" | "disabled" | "absent" | "failed".
      */
-    private fun disableComponent(component: String): Boolean =
-        runSu(
+    private fun neutralizePackage(pkg: String, preferDisable: Boolean): String {
+        if (pkg in protectedPackages) {
+            Log.w(tag, "neutralize: refusing protected package $pkg")
+            return "failed"
+        }
+
+        if (preferDisable && disablePackage(pkg)) {
+            Log.d(tag, "neutralize $pkg -> disabled")
+            return "disabled"
+        }
+
+        // `-k` keeps the data so a re-enabled package comes back configured.
+        val res = runSuCapture(
+            "pm uninstall -k --user 0 $pkg",
+            "pm uninstall --user 0 $pkg",
+            "pm uninstall $pkg",
+        )
+        if (res.output.contains("Success", ignoreCase = true)) {
+            Log.d(tag, "neutralize $pkg -> uninstalled")
+            return "uninstalled"
+        }
+
+        val outcome = when {
+            !preferDisable && disablePackage(pkg) -> "disabled"
+            !isPackageActive(pkg) -> "absent"
+            else -> "failed"
+        }
+        Log.d(
+            tag,
+            "neutralize $pkg -> $outcome (uninstall out=[${res.output.take(160)}])"
+        )
+        return outcome
+    }
+
+    /**
+     * Neutralises every package in [packages]; returns pkg -> outcome.
+     *
+     * Checks before it writes, so a box that has already been cleaned costs one
+     * `pm list` per package and no writes at all. The previous version re-ran six
+     * uninstalls on every single boot, and each of those mutated the set of HOME
+     * candidates — which is what kept invalidating the launcher preference.
+     */
+    private fun neutralizePackages(
+        packages: List<String>,
+        preferDisable: Boolean = false,
+    ): Map<String, String> {
+        val (installed, disabled) = packageState()
+        // An empty snapshot means the read failed, not that the box has no
+        // packages. Fall back to attempting each one rather than silently
+        // reporting the whole list as already gone.
+        val trusted = installed.isNotEmpty()
+        val out = LinkedHashMap<String, String>()
+        for (p in packages.distinct()) {
+            if (p.isBlank() || p in protectedPackages) continue
+            val active = !trusted || (p in installed && p !in disabled)
+            out[p] = if (!active) "absent" else neutralizePackage(p, preferDisable)
+        }
+        return out
+    }
+
+    /**
+     * One root read of what is installed and what is disabled for user 0.
+     *
+     * Taken once per pass rather than once per package: every [runSuCapture]
+     * spawns a fresh `su`, and on a box that has already been cleaned this
+     * snapshot is the only root work the removal step does at all.
+     */
+    private fun packageState(): Pair<Set<String>, Set<String>> {
+        val res = runSuCapture(
+            "pm list packages --user 0",
+            "echo $MARKER",
+            "pm list packages -d --user 0",
+        )
+        val parts = res.output.split(MARKER)
+        fun parse(block: String?): Set<String> =
+            block?.lineSequence()
+                ?.map { it.trim() }
+                ?.filter { it.startsWith("package:") }
+                ?.map { it.removePrefix("package:").substringBefore(':') }
+                ?.toSet()
+                ?: emptySet()
+        return parse(parts.getOrNull(0)) to parse(parts.getOrNull(1))
+    }
+
+    /** Channel entry point. Returns the packages this call actually changed. */
+    private fun uninstallPackages(packages: List<String>): List<String> =
+        neutralizePackages(packages)
+            .filterValues { it == "uninstalled" || it == "disabled" }
+            .keys.toList()
+
+    /**
+     * Disables (does NOT uninstall) a component that can't be removed but should
+     * be blocked — e.g. the TV Settings activity, so the remote can't open
+     * system settings. Targets are `pkg/.Activity`.
+     *
+     * Judged on `pm`'s own output, not on the exit code: [runSuCapture] reports
+     * the status of the LAST command in the shell, so the primary command
+     * succeeding was being masked by its own fallback failing right after it —
+     * these read as failures while actually having worked.
+     */
+    private fun disableComponent(component: String): Boolean {
+        val res = runSuCapture(
             "pm disable --user 0 $component",
             "pm disable-user --user 0 $component"
-        ) == 0
+        )
+        val ok = res.output.contains("new state: disabled", ignoreCase = true)
+        Log.d(tag, "disableComponent $component -> $ok out=[${res.output.take(200)}]")
+        return ok
+    }
 
-    private fun disablePackage(pkg: String): Boolean =
-        runSu(
+    /**
+     * Disables [pkg] for user 0 — it stops resolving intents (HOME included) and
+     * stays that way across reboots, and `pm enable` undoes it.
+     *
+     * Verified rather than inferred, for the exit-code reason in
+     * [disableComponent], and re-checked against the package list when `pm` says
+     * nothing useful.
+     */
+    private fun disablePackage(pkg: String): Boolean {
+        if (pkg in protectedPackages) {
+            Log.w(tag, "disablePackage: refusing protected package $pkg")
+            return false
+        }
+        val res = runSuCapture(
             "pm disable-user --user 0 $pkg",
             "pm disable $pkg"
-        ) == 0
+        )
+        // "Package com.foo new state: disabled-user" — covers both spellings.
+        val ok = res.output.contains("new state: disabled", ignoreCase = true) ||
+            !isPackageActive(pkg)
+        Log.d(tag, "disablePackage $pkg -> $ok out=[${res.output.take(200)}]")
+        return ok
+    }
 
     /** Enables ADB-over-TCP only for privileged roles; disables otherwise. */
     private fun configureAdbTcp(user: String?): Boolean {
@@ -486,10 +772,58 @@ class StbBridge(private val context: Context) {
     }
 
     /**
-     * Boot-time maintenance sequence: device-owner provisioning, default-launcher
-     * takeover, unwanted-app removal (uninstall), and disabling of components /
-     * packages that can't be removed (e.g. system settings). Returns a summary
-     * map. No-op without root.
+     * Read-only snapshot of everything that decides whether the kiosk can work,
+     * for display ON THE BOX.
+     *
+     * Exists because the field cannot always send us logs: a box in a customer's
+     * home is not on adb, and "it did the same thing" is not a diagnosis. Every
+     * value here is one the takeover depends on, so a photograph of this screen
+     * is enough to say which step failed and why — and to tell whether the
+     * boxes that misbehave differ from the ones that don't.
+     *
+     * Changes nothing. Safe to call at any time.
+     */
+    private fun kioskDiagnostics(): Map<String, Any?> {
+        val rooted = isRootAvailable()
+        return mapOf(
+            "model" to Build.MODEL,
+            "device" to Build.DEVICE,
+            "product" to Build.PRODUCT,
+            "fingerprint" to Build.FINGERPRINT,
+            "androidRelease" to Build.VERSION.RELEASE,
+            "sdk" to Build.VERSION.SDK_INT,
+            // Whether a root shell was actually GRANTED — not whether the su
+            // binary exists, which is what we used to report.
+            "root" to rooted,
+            "suBinaryPresent" to suBinaryPaths.any { File(it).exists() },
+            "rootId" to rootIdOutput().take(200),
+            "deviceOwner" to isDeviceOwner(),
+            "defaultLauncher" to defaultLauncher(),
+            "homeRoleHolder" to if (rooted) homeRoleHolder() else null,
+            "homeCandidates" to homeCandidates(rooted),
+            "timezone" to java.util.TimeZone.getDefault().id,
+            "systemTime" to java.text.SimpleDateFormat(
+                "yyyy-MM-dd HH:mm:ss Z", Locale.US
+            ).format(java.util.Date()),
+        )
+    }
+
+    /**
+     * Boot-time kiosk sequence. THE ORDER IS THE WHOLE POINT.
+     *
+     * Clear the field first — every other HOME candidate, then the preinstalled
+     * apps the box should not offer — and pin ourselves only once that set is
+     * final. The previous order did the opposite: it wrote the HOME preference
+     * and then uninstalled SmartLauncher and disabled Google TV Home, changing
+     * the very set the preference had just been recorded against. Android
+     * answers that by dropping the preference, so the box came up pinned on one
+     * boot and on "Use ___ as Home" the next — and because the pin step was
+     * skipped whenever the launcher already looked right, nothing ever put it
+     * back. That is the oscillation the field is seeing.
+     *
+     * Reports what it achieved, not what it attempted. [kioskReady] is the retry
+     * contract for the Dart side; [kioskDurable] says whether it will still hold
+     * after the next reboot.
      */
     private fun runStartupMaintenance(
         unwantedApps: List<String>,
@@ -497,32 +831,69 @@ class StbBridge(private val context: Context) {
         disabledPackages: List<String>
     ): Map<String, Any?> {
         val summary = mutableMapOf<String, Any?>()
+        val myPkg = context.packageName
         val rooted = isRootAvailable()
         summary["root"] = rooted
         // Surface exactly what the root shell reports — makes box logs conclusive
         // (e.g. empty/uid!=0 means su exists but wasn't granted to this package).
         val rootId = rootIdOutput()
         summary["rootId"] = rootId
-        Log.i(tag, "runStartupMaintenance: root=$rooted id=[$rootId]")
-        if (!rooted) {
-            Log.w(tag, "runStartupMaintenance: root unavailable, skipping")
-            return summary
-        }
-        summary["deviceOwner"] = if (isDeviceOwner()) true else setupDeviceOwner()
-        if (summary["deviceOwner"] != true && lastDeviceOwnerOutput.isNotEmpty()) {
+        summary["sdk"] = Build.VERSION.SDK_INT
+        summary["launcherBefore"] = defaultLauncher()
+        summary["homeCandidatesBefore"] = homeCandidates(rooted)
+        // Who owns android.app.role.HOME going in. On Android 10+ this, not the
+        // preferred-activity table, is what decides the boot launcher — and a
+        // box that boots straight into its stock launcher with NO chooser is a
+        // box where the firmware already made that launcher the role holder.
+        if (rooted) summary["homeRoleBefore"] = homeRoleHolder()
+        Log.i(tag, "runStartupMaintenance: root=$rooted id=[$rootId] sdk=${Build.VERSION.SDK_INT}")
+
+        // Device owner is the one pin the user cannot undo, and it needs neither
+        // root nor any of the steps below — so it is attempted whatever else is
+        // available. It only succeeds on a box that has not completed setup;
+        // everywhere else the fallbacks below are all we have.
+        val owner = if (isDeviceOwner()) true else if (rooted) setupDeviceOwner() else false
+        summary["deviceOwner"] = owner
+        if (!owner && lastDeviceOwnerOutput.isNotEmpty()) {
             summary["deviceOwnerError"] = lastDeviceOwnerOutput
         }
-        summary["launcherBefore"] = defaultLauncher()
-        summary["launcherSet"] =
-            if (defaultLauncher() == context.packageName) true else setDefaultLauncher()
-        // Device-owner framework lock for HOME (durable; survives reboot).
+
+        if (rooted) {
+            // 1. Clear the field. Competing launchers first — these are exactly
+            //    what puts the HOME chooser on screen. Reversible route: a
+            //    disabled launcher no longer resolves HOME, which is all we need.
+            summary["homeNeutralized"] =
+                neutralizePackages(homeCandidates(true), preferDisable = true)
+            // 2. Then the preinstalled apps the box should not offer at all.
+            summary["removed"] = neutralizePackages(unwantedApps)
+            summary["disabledComponents"] =
+                disabledComponents.filter { it.isNotBlank() && disableComponent(it) }
+            // Kept as disable-only (not neutralize): this list is documented as
+            // reversible — see kStbDisabledPackages.
+            summary["disabledPackages"] =
+                disabledPackages.filter { it.isNotBlank() && disablePackage(it) }
+        } else {
+            Log.w(tag, "runStartupMaintenance: no root — cannot clear competing launchers")
+        }
+
+        // 3. The candidate set is final. Pin now, so the preference is recorded
+        //    against a set that is not about to change underneath it.
         summary["persistentLauncher"] = setPersistentLauncher()
-        summary["launcherAfter"] = defaultLauncher()
-        summary["removed"] = uninstallPackages(unwantedApps)
-        summary["disabledComponents"] =
-            disabledComponents.filter { it.isNotBlank() && disableComponent(it) }
-        summary["disabledPackages"] =
-            disabledPackages.filter { it.isNotBlank() && disablePackage(it) }
+        summary["launcherSet"] = if (rooted) setDefaultLauncher() else false
+
+        // 4. Verify. Never report success from the fact that a command ran.
+        val after = defaultLauncher()
+        val remaining = homeCandidates(rooted)
+        summary["launcherAfter"] = after
+        summary["homeCandidatesAfter"] = remaining
+        if (rooted) summary["homeRoleAfter"] = homeRoleHolder()
+        val ready = after == myPkg
+        summary["kioskReady"] = ready
+        // Durable = nothing can take HOME back, either because the framework
+        // holds it for us (device owner) or because no other candidate is left.
+        summary["kioskDurable"] =
+            ready && (summary["persistentLauncher"] == true || remaining.isEmpty())
+
         Log.i(tag, "runStartupMaintenance -> $summary")
         return summary
     }
@@ -747,10 +1118,27 @@ class StbBridge(private val context: Context) {
                 os.writeBytes("exit\n")
                 os.flush()
             }
-            val code = process.waitFor()
+            // Bounded wait. A superuser layer that answers a request with a
+            // grant PROMPT leaves `su` hanging indefinitely when there is nobody
+            // in front of the box — and this runs on a single-threaded executor,
+            // so one hang wedges every kiosk, timezone and power call queued
+            // behind it for the rest of the session.
+            val code = AtomicInteger(-1)
+            val waiter = Thread { code.set(runCatching { process.waitFor() }.getOrDefault(-1)) }
+            waiter.start()
+            waiter.join(SU_TIMEOUT_MS)
+            if (waiter.isAlive) {
+                Log.w(
+                    tag,
+                    "su TIMED OUT after ${SU_TIMEOUT_MS}ms (grant prompt with nobody to " +
+                        "answer it?) — killing: ${commands.firstOrNull()?.take(60)}"
+                )
+                runCatching { process.destroy() }
+                waiter.join(1000)
+            }
             tOut.join(2000)
             tErr.join(2000)
-            SuResult(code, synchronized(out) { out.toString().trim() })
+            SuResult(code.get(), synchronized(out) { out.toString().trim() })
         } catch (t: Throwable) {
             Log.e(tag, "runSu failed", t)
             SuResult(-1, t.message ?: "")
@@ -770,5 +1158,12 @@ class StbBridge(private val context: Context) {
     companion object {
         private const val NOT_IMPLEMENTED = "__not_implemented__"
         private const val ERROR = "stb_error"
+
+        /** Separates two command outputs inside one root shell session. */
+        private const val MARKER = "__fndtv__"
+
+        /** Ceiling on a single root shell. Generous for `pm` work, finite for a
+         *  superuser prompt nobody is going to answer. */
+        private const val SU_TIMEOUT_MS = 15_000L
     }
 }

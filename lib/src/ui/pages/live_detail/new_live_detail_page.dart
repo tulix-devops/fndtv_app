@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:app_localization/app_localization.dart';
+import 'package:fndtv/src/core/services/stb_clock.dart';
 import 'package:fndtv/src/data/models/content/images_model.dart';
 import 'package:fndtv/src/data/models/content/live_model.dart';
 import 'package:fndtv/src/data/repositories/content/content_repository.dart';
@@ -601,7 +602,10 @@ class _InlineLivePlayerState extends State<_InlineLivePlayer> {
 String _fmtTime(String? iso) {
   if (iso == null || iso.isEmpty) return '';
   try {
-    return DateFormat('HH:mm').format(DateTime.parse(iso).toLocal());
+    // Through StbClock, not toLocal() — see StbClock: the system zone stays
+    // wrong on a box where `su` is refused.
+    return DateFormat('HH:mm')
+        .format(StbClock.instance.toBoxLocal(DateTime.parse(iso)));
   } catch (_) {
     return '';
   }

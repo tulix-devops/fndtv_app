@@ -3,6 +3,7 @@ package com.fndtv.videoplayer
 import android.content.Context
 import android.media.MediaPlayer
 import android.os.Handler
+import android.os.SystemClock
 import android.os.Looper
 import android.util.Log
 import android.view.Gravity
@@ -59,6 +60,17 @@ import kotlin.math.roundToInt
  * display aspect is corrected by hand. The reference app does exactly this, and
  * it is why [displayAspectFor] exists. ExoPlayer does parse SAR, so on that
  * engine we use its `pixelWidthHeightRatio` instead of guessing.
+ *
+ * **The surface outlives nothing — handle both ends of its lifecycle.** A real
+ * [SurfaceView] is the whole point of this class, and the price is that Android
+ * destroys its Surface whenever the window stops: the box sleeping on
+ * `StbPowerGuard`'s idle timer is the everyday case. On destroy the BufferQueue
+ * is abandoned while the decoder is still writing into it (`api:3` =
+ * NATIVE_WINDOW_API_MEDIA in the resulting logcat spam), and on wake Android
+ * hands back a NEW Surface with nothing attached. Neither end fixes itself, so
+ * both are handled in the [SurfaceHolder.Callback] below — release on destroy,
+ * re-open on create. Without the re-open the page stays black until the viewer
+ * presses Back, which is what 0.1.15+16 shipped.
  */
 private const val TAG = "StbSurfacePlayer"
 
@@ -86,6 +98,9 @@ private interface PlaybackEngine {
     fun open(url: String, autoplay: Boolean)
     fun play()
     fun pause()
+
+    /** Whether the transport is actually running, asked of the engine itself. */
+    fun isPlaying(): Boolean
     fun seekTo(ms: Long)
     fun positionMs(): Long
     fun durationMs(): Long
@@ -164,46 +179,154 @@ class StbSurfacePlayerView(
     private var engineIndex = 0
 
     private var surfaceReady = false
+
+    /** Set when an open arrives before the surface exists; consumed on create. */
     private var pendingUrl: String? = null
-    private var pendingAutoplay = true
 
     private var firstFrameSeen = false
+
+    /** When the current engine was opened — bounds the watchdog re-arms. */
+    private var engineStartedAt = 0L
     private var firstFrameWatchdog: Runnable? = null
     private var currentUrl: String = ""
-    private var currentAutoplay = true
 
     private var statsTimer: Runnable? = null
+
+    /**
+     * Whether this is a live channel, from the creation params. Live has no
+     * position worth restoring across a sleep — it resumes at the live edge,
+     * which is what a viewer coming back to the box expects. DVR/archive does.
+     *
+     * Defaults to true when absent, which is what the splash boot video
+     * (`stb_surface_boot_video.dart`) relies on: it passes no `isLive` and
+     * should restart from 0 rather than resume, if its surface is ever
+     * re-created.
+     */
+    private val isLive: Boolean = params["isLive"] as? Boolean ?: true
+
+    /**
+     * What the viewer last ASKED for, as opposed to what the engine is doing.
+     * Survives the engine being torn down with the surface, so a box that went
+     * to sleep paused comes back paused. Single source of truth — the engines
+     * are always started playing (see [pauseAfterFirstFrame] for why).
+     */
+    private var playbackRequested = true
+
+    /**
+     * Engines are ALWAYS started playing, even when the viewer had paused.
+     *
+     * A paused start is a trap on this hardware: [MediaPlayerEngine] only calls
+     * `start()` when asked to play, and `MEDIA_INFO_VIDEO_RENDERING_START` — the
+     * only thing that reports a first frame — never arrives without it. The
+     * first-frame watchdog would then fire on a player that is working
+     * perfectly, burn the retry budget and cascade onto ExoPlayer, which the
+     * class doc explains is the engine that wedges on these feeds. So we start
+     * playing, let a real frame land, and pause on the way out of
+     * [noteFirstFrame] — which also gets the viewer a picture to look at
+     * instead of a black rectangle.
+     */
+    private var pauseAfterFirstFrame = false
+
+    /** Applied once the next engine reaches prepared. 0 = start / live edge. */
+    private var pendingSeekMs = 0L
+
+    /** True while the current open is a recovery from surface re-creation. */
+    private var resuming = false
+    private var wakeRetries = 0
+
+    /**
+     * The one posted restart — a wake retry or a cascade step. Held in a field
+     * so both are cancellable: an un-cancellable `main.post` is how an engine
+     * ends up bound to a Surface that was destroyed while it sat in the queue.
+     */
+    private var restartTask: Runnable? = null
+
+    /** Set first in [dispose]. Every async entry point checks it. */
+    private var disposed = false
+
+    /** Held so it can be removed in [dispose] — an anonymous object cannot. */
+    private val holderCallback = SurfaceCallback()
 
     init {
         methodChannel.setMethodCallHandler(this)
         eventChannel.setStreamHandler(this)
 
-        surfaceView.holder.addCallback(object : SurfaceHolder.Callback {
-            override fun surfaceCreated(holder: SurfaceHolder) {
-                surfaceReady = true
-                pendingUrl?.let { url ->
-                    pendingUrl = null
-                    startEngine(url, pendingAutoplay)
-                }
-            }
-
-            override fun surfaceChanged(h: SurfaceHolder, f: Int, w: Int, ht: Int) = Unit
-
-            override fun surfaceDestroyed(holder: SurfaceHolder) {
-                surfaceReady = false
-            }
-        })
+        surfaceView.holder.addCallback(holderCallback)
 
         (params["url"] as? String)?.let { url ->
             openInternal(url, params["autoplay"] as? Boolean ?: true)
         }
     }
 
+    /**
+     * Both ends of the surface lifecycle. See the class doc — neither end
+     * recovers on its own, and getting only one of them is what produced the
+     * black-screen-after-wake in 0.1.15+16.
+     */
+    private inner class SurfaceCallback : SurfaceHolder.Callback {
+        override fun surfaceCreated(holder: SurfaceHolder) {
+            if (disposed) return
+            surfaceReady = true
+
+            val pending = pendingUrl
+            if (pending != null) {
+                pendingUrl = null
+                startEngine(pending, playbackRequested)
+                return
+            }
+
+            // RE-creation, not the first one: the box just woke, or we came
+            // back from the background. Android hands us a brand new Surface
+            // with a brand new BufferQueue and NOTHING attached to it — the
+            // engine that was rendering here died with the old one. Without
+            // re-opening, the platform view sits black forever and the only way
+            // out is leaving the page.
+            if (currentUrl.isEmpty()) return
+            Log.i(TAG, "surface re-created — reopening at ${pendingSeekMs}ms")
+            wakeRetries = 0
+            startEngine(currentUrl, playbackRequested, resumed = true)
+        }
+
+        override fun surfaceChanged(h: SurfaceHolder, f: Int, w: Int, ht: Int) = Unit
+
+        override fun surfaceDestroyed(holder: SurfaceHolder) {
+            surfaceReady = false
+            // This Surface's BufferQueue is abandoned the moment we return. An
+            // engine left running keeps decoding into it — that is the
+            // "BufferQueue has been abandoned" spam in a sleeping box's logcat
+            // — and holds the hardware decoder open all night.
+            cancelFirstFrameWatchdog()
+            cancelRestart()
+            stopStats()
+            val dying = engine ?: return
+            // Only let a REAL position overwrite the saved one. MediaPlayer
+            // reports 0 whenever getCurrentPosition throws, which it does
+            // before it reaches Prepared — so a second destroy/create pair
+            // landing mid-resume would otherwise wipe a good archive position
+            // and silently restart the program from the beginning.
+            val pos = dying.positionMs()
+            pendingSeekMs = when {
+                isLive -> 0L
+                pos > 0L -> pos
+                else -> pendingSeekMs
+            }
+            Log.i(TAG, "surface destroyed — releasing ${dying.name} at ${pendingSeekMs}ms")
+            dying.release()
+            engine = null
+        }
+    }
+
     override fun getView(): View = container
 
     override fun dispose() {
+        // First, so anything already queued on the main looper turns into a
+        // no-op rather than resurrecting a released engine.
+        disposed = true
+        surfaceReady = false
         stopStats()
         cancelFirstFrameWatchdog()
+        cancelRestart()
+        surfaceView.holder.removeCallback(holderCallback)
         methodChannel.setMethodCallHandler(null)
         eventChannel.setStreamHandler(null)
         engine?.release()
@@ -231,30 +354,102 @@ class StbSurfacePlayerView(
                     result.success(null)
                 }
             }
-            "play" -> { engine?.play(); result.success(null) }
-            "pause" -> { engine?.pause(); result.success(null) }
-            "seekTo" -> {
-                val ms = (call.argument<Number>("positionMs") ?: 0).toLong()
-                engine?.seekTo(ms)
+            // Transport controls RECORD intent before the first frame; they do
+            // not touch the engine.
+            //
+            // MediaPlayer is still in Preparing during the post-wake spinner,
+            // where `start()`/`seekTo()` are invalid calls. The platform does
+            // not throw — it posts MEDIA_ERROR — which lands in
+            // `setOnErrorListener` with `firstFrameSeen == false` and is
+            // indistinguishable from the engine failing to start, so
+            // `advanceEngine` burns a wake retry. A viewer pressing OK at the
+            // spinner (which the QA script asks for) would cascade the page
+            // onto ExoPlayer for no reason. The engine is already starting
+            // playing, so intent is all we need to hold onto.
+            //
+            // The `playing` events sent here cover the pre-first-frame window,
+            // where the engine is not touched and so reports nothing; once a
+            // frame is up the engine's own play()/pause() report the real state.
+            "play" -> { requestPlay(); result.success(null) }
+            "pause" -> { requestPause(); result.success(null) }
+            // Direction decided HERE rather than from a `_playing` flag on the
+            // Dart side that can drift out of sync and then toggle the wrong
+            // way — see MediaPlayerEngine. Once a frame is up the engine's real
+            // state decides; before that, the recorded intent does.
+            "togglePlay" -> {
+                val e = engine
+                val playingNow =
+                    if (firstFrameSeen && e != null) e.isPlaying() else playbackRequested
+                if (playingNow) requestPause() else requestPlay()
                 result.success(null)
             }
-            "position" -> result.success(engine?.positionMs() ?: 0L)
+            "seekTo" -> {
+                val ms = (call.argument<Number>("positionMs") ?: 0).toLong()
+                if (firstFrameSeen) engine?.seekTo(ms)
+                result.success(null)
+            }
+            // While a resume is in flight the engine reports 0 — it has not
+            // reached Prepared — and the progress bar would snap to 00:00 and
+            // back, which reads as "the archive restarted from the beginning".
+            // The position we are restoring TO is the honest answer until the
+            // engine can speak for itself.
+            "position" -> result.success(
+                if (!firstFrameSeen && pendingSeekMs > 0L) {
+                    pendingSeekMs
+                } else {
+                    engine?.positionMs() ?: 0L
+                },
+            )
             else -> result.notImplemented()
         }
     }
 
+    private fun requestPlay() {
+        playbackRequested = true
+        pauseAfterFirstFrame = false
+        // Once a frame is up the engine reports its real state itself.
+        if (firstFrameSeen) engine?.play() else send(mapOf("event" to "playing", "value" to true))
+    }
+
+    private fun requestPause() {
+        playbackRequested = false
+        // Before the first frame, defer — otherwise the pause is dropped and
+        // the channel plays on against the viewer's wish.
+        if (firstFrameSeen) {
+            engine?.pause()
+        } else {
+            pauseAfterFirstFrame = true
+            send(mapOf("event" to "playing", "value" to false))
+        }
+    }
+
+    /** A fresh, explicit open — a new stream, or Dart's Retry. Nothing about a
+     *  previous stream's position or wake state carries into it. */
     private fun openInternal(url: String, autoplay: Boolean) {
         engine?.release()
         engine = null
+        cancelRestart()
+        pendingSeekMs = 0L
+        wakeRetries = 0
+        resuming = false
+        pauseAfterFirstFrame = false
+        playbackRequested = autoplay
         if (!surfaceReady) {
             pendingUrl = url
-            pendingAutoplay = autoplay
             return
         }
         startEngine(url, autoplay)
     }
 
-    private fun startEngine(url: String, autoplay: Boolean) {
+    /**
+     * [playing] is what the VIEWER wants. The engine is started playing either
+     * way — see [pauseAfterFirstFrame].
+     */
+    private fun startEngine(url: String, playing: Boolean, resumed: Boolean = false) {
+        if (disposed) return
+        // Defensive: no caller should reach here holding a live engine, but a
+        // leaked one keeps a hardware decoder for the life of the process.
+        engine?.release()
         val name = engineOrder.getOrNull(engineIndex) ?: ENGINE_MEDIAPLAYER
         val next = when (name) {
             ENGINE_EXOPLAYER -> ExoPlayerEngine()
@@ -262,11 +457,14 @@ class StbSurfacePlayerView(
         }
         engine = next
         currentUrl = url
-        currentAutoplay = autoplay
+        playbackRequested = playing
+        pauseAfterFirstFrame = !playing
+        resuming = resumed
         firstFrameSeen = false
+        engineStartedAt = SystemClock.elapsedRealtime()
         Log.i(TAG, "engine=${next.name} opening $url")
         send(mapOf("event" to "engine", "name" to next.name))
-        next.open(url, autoplay)
+        next.open(url, autoplay = true)
         armFirstFrameWatchdog(next.name)
         startStats()
     }
@@ -278,8 +476,27 @@ class StbSurfacePlayerView(
      */
     private fun advanceEngine(why: String) {
         cancelFirstFrameWatchdog()
+        // A box that has just woken does not necessarily have its network back
+        // yet — the same transient-becomes-permanent shape as the boot network
+        // race. Falling through the cascade here would end at NO_ENGINE, and
+        // Dart turns that into a ONE-WAY hand-off to mpv, which is the slow
+        // tier on exactly this hardware. So a resume retries the engine that
+        // was already working before it is allowed to give up on it.
+        if (resuming && wakeRetries < WAKE_RETRIES) {
+            wakeRetries++
+            Log.w(TAG, "resume attempt $wakeRetries failed ($why) — retrying ${engine?.name}")
+            send(mapOf("event" to "buffering", "value" to true))
+            stopStats()
+            engine?.release()
+            engine = null
+            scheduleRestart(WAKE_RETRY_DELAY_MS, resumed = true)
+            return
+        }
         if (engineIndex + 1 >= engineOrder.size) {
             Log.e(TAG, "all engines exhausted ($why)")
+            stopStats()
+            engine?.release()
+            engine = null
             send(
                 mapOf(
                     "event" to "error",
@@ -292,9 +509,31 @@ class StbSurfacePlayerView(
         engineIndex++
         Log.w(TAG, "engine ${engine?.name} failed ($why) — trying ${engineOrder[engineIndex]}")
         send(mapOf("event" to "buffering", "value" to true))
+        stopStats()
         engine?.release()
         engine = null
-        main.post { startEngine(currentUrl, currentAutoplay) }
+        scheduleRestart(0L, resumed = resuming)
+    }
+
+    /**
+     * Posts the next [startEngine], cancellably and guarded.
+     *
+     * Both callers hand control to the main looper, and in that window the box
+     * can go to sleep. A bare `main.post` would then start an engine against a
+     * Surface that no longer exists — decoding into an abandoned BufferQueue for
+     * the whole sleep, and leaving a second engine behind for [surfaceCreated]
+     * to overwrite on wake.
+     */
+    private fun scheduleRestart(delayMs: Long, resumed: Boolean) {
+        cancelRestart()
+        val task = Runnable {
+            restartTask = null
+            if (!disposed && surfaceReady) {
+                startEngine(currentUrl, playbackRequested, resumed = resumed)
+            }
+        }
+        restartTask = task
+        main.postDelayed(task, delayMs)
     }
 
     /**
@@ -305,16 +544,49 @@ class StbSurfacePlayerView(
      * produces an output frame or an error, so no listener ever fires. Only
      * elapsed time detects that. Healthy channels start in ~2s here.
      */
-    private fun armFirstFrameWatchdog(engineName: String) {
+    private fun armFirstFrameWatchdog(engineName: String, ready: Boolean = false) {
         cancelFirstFrameWatchdog()
-        val timeoutMs =
-            if (engineName == ENGINE_MEDIAPLAYER) MP_FIRST_FRAME_MS else EXO_FIRST_FRAME_MS
+        // TWO PHASES, because the old single deadline measured the wrong thing.
+        //
+        // It started at open() and so spent its whole budget on the network:
+        // a VOD that simply took a while to fetch was declared unplayable,
+        // cascaded through both engines, and handed the box to mpv — which on
+        // this hardware is the slow-motion path. A viewer reported exactly
+        // that: a film that had been playing fine came back in slow motion
+        // with the other player's controls after a restart.
+        //
+        // The wedge this watchdog exists for happens AFTER the source is
+        // ready: the engine has parsed the stream, accepts input, and never
+        // emits a frame or an error. So the short render budget starts at
+        // `ready`, and while the source is still opening it only has to beat a
+        // generous ceiling — an open that genuinely fails reports an error of
+        // its own, which advances the engine without waiting for any clock.
+        val timeoutMs = when {
+            !ready -> OPEN_CEILING_MS
+            engineName == ENGINE_MEDIAPLAYER -> MP_FIRST_FRAME_MS
+            else -> EXO_FIRST_FRAME_MS
+        }
+        val phase = if (ready) "render" else "open"
+
+        // Re-arming on evidence of life must not become an indefinite reprieve.
+        // The wedge case can sit in READY and drop back to BUFFERING as its
+        // buffer drains, and each of those would otherwise reset the deadline
+        // forever — trading a premature fallback for one that never happens.
+        // Nothing may push the decision past this absolute cap.
+        val elapsed = SystemClock.elapsedRealtime() - engineStartedAt
+        val remaining = TOTAL_CEILING_MS - elapsed
+        if (remaining <= 0L) {
+            advanceEngine("no first frame in ${TOTAL_CEILING_MS}ms total on $engineName")
+            return
+        }
+        val delay = minOf(timeoutMs, remaining)
+
         val task = Runnable {
             if (firstFrameSeen) return@Runnable
-            advanceEngine("no first frame in ${timeoutMs}ms on $engineName")
+            advanceEngine("no first frame in ${delay}ms ($phase) on $engineName")
         }
         firstFrameWatchdog = task
-        main.postDelayed(task, timeoutMs)
+        main.postDelayed(task, delay)
     }
 
     private fun cancelFirstFrameWatchdog() {
@@ -322,12 +594,29 @@ class StbSurfacePlayerView(
         firstFrameWatchdog = null
     }
 
+    private fun cancelRestart() {
+        restartTask?.let { main.removeCallbacks(it) }
+        restartTask = null
+    }
+
     private fun noteFirstFrame() {
         if (firstFrameSeen) return
         firstFrameSeen = true
+        // Picture is back: the resume, if this was one, is complete.
+        resuming = false
+        pendingSeekMs = 0L
         cancelFirstFrameWatchdog()
         Log.i(TAG, "first frame on ${engine?.name}")
         send(mapOf("event" to "firstFrame"))
+        // The viewer had paused before the box slept. We started playing anyway
+        // so a real frame would land — see [pauseAfterFirstFrame] — and now that
+        // one has, settle back onto what they actually asked for.
+        if (pauseAfterFirstFrame) {
+            pauseAfterFirstFrame = false
+            engine?.pause()
+            Log.i(TAG, "resumed paused — holding on the first frame")
+            send(mapOf("event" to "playing", "value" to false))
+        }
     }
 
     /**
@@ -392,6 +681,22 @@ class StbSurfacePlayerView(
         }
 
     private fun send(payload: Map<String, Any?>) {
+        // Both engines report readiness as `initialized` and rebuffering as
+        // `buffering`, so the watchdog is re-armed here rather than in each
+        // engine. Either is evidence the pipeline is alive, which is what the
+        // deadline should be measured against — the same "decide on progress,
+        // not on logs" lesson already recorded in StbVideoPlayer's stall
+        // watchdog.
+        if (!firstFrameSeen) {
+            val engineName = engine?.name
+            when {
+                payload["event"] == "initialized" && engineName != null ->
+                    armFirstFrameWatchdog(engineName, ready = true)
+                payload["event"] == "buffering" && payload["value"] == false &&
+                    engineName != null ->
+                    armFirstFrameWatchdog(engineName, ready = true)
+            }
+        }
         main.post { events?.success(payload) }
     }
 
@@ -449,6 +754,11 @@ class StbSurfacePlayerView(
                 // convention is applied in displayAspectFor.
                 applyVideoSize(mp.videoWidth, mp.videoHeight, 0f)
                 mp.setOnVideoSizeChangedListener { _, w, h -> applyVideoSize(w, h, 0f) }
+                // Restores an archive position after a sleep tore the surface,
+                // and with it this engine, down. Live channels carry 0 and so
+                // land at the live edge — which is the right place to come back
+                // to after the box has been asleep for hours.
+                if (pendingSeekMs > 0L) mp.seekTo(pendingSeekMs.toInt())
                 send(mapOf("event" to "buffering", "value" to false))
                 send(mapOf("event" to "initialized", "durationMs" to durationMs()))
                 if (autoplay) {
@@ -495,8 +805,34 @@ class StbSurfacePlayerView(
             p.prepareAsync()
         }
 
-        override fun play() { player?.start() }
-        override fun pause() { if (player?.isPlaying == true) player?.pause() }
+        /** `isPlaying` throws if the player is not in a valid state. */
+        private fun playingNow(): Boolean =
+            try { player?.isPlaying == true } catch (_: IllegalStateException) { false }
+
+        // BOTH of these must report the new transport state.
+        //
+        // MediaPlayer has no state callback — there is no equivalent of
+        // ExoPlayer's onIsPlayingChanged, so nothing else tells Dart that the
+        // transport moved, and the only "playing" event ever sent was the one
+        // at autoplay. Dart's `_playing` therefore stayed true forever, and
+        // since it decides the toggle direction (`_playing ? pause : play`),
+        // the press after a pause sent `pause` AGAIN. The guard below makes
+        // that a no-op, so the video could never be resumed and the button
+        // looked dead — the reported "we paused it and were never able to
+        // play again".
+        override fun play() {
+            runCatching { player?.start() }
+                .onFailure { Log.w(TAG, "MediaPlayer.start failed", it) }
+            send(mapOf("event" to "playing", "value" to playingNow()))
+        }
+
+        override fun pause() {
+            runCatching { if (playingNow()) player?.pause() }
+                .onFailure { Log.w(TAG, "MediaPlayer.pause failed", it) }
+            send(mapOf("event" to "playing", "value" to playingNow()))
+        }
+
+        override fun isPlaying(): Boolean = playingNow()
         override fun seekTo(ms: Long) { player?.seekTo(ms.toInt()) }
         override fun positionMs() = try {
             player?.currentPosition?.toLong() ?: 0L
@@ -589,13 +925,19 @@ class StbSurfacePlayerView(
             })
             val assetPath = flutterAssetPath(url)
             val uri = if (assetPath != null) "asset:///$assetPath" else url
-            p.setMediaItem(MediaItem.fromUri(uri))
+            // Start position rather than a seek before prepare: same effect, no
+            // ordering subtlety. Same resume-after-sleep case as MediaPlayer.
+            // TIME_UNSET — NOT 0 — when there is nothing to restore: 0 would pin
+            // a live stream to the start of its window instead of the live edge.
+            val startMs = if (pendingSeekMs > 0L) pendingSeekMs else C.TIME_UNSET
+            p.setMediaItem(MediaItem.fromUri(uri), startMs)
             p.playWhenReady = autoplay
             p.prepare()
         }
 
         override fun play() { player?.play() }
         override fun pause() { player?.pause() }
+        override fun isPlaying(): Boolean = player?.isPlaying == true
         override fun seekTo(ms: Long) { player?.seekTo(ms) }
         override fun positionMs() = player?.currentPosition ?: 0L
         override fun durationMs(): Long {
@@ -603,8 +945,29 @@ class StbSurfacePlayerView(
             return if (d == C.TIME_UNSET) 0L else d
         }
         override fun droppedFrames() = dropped
+
+        /**
+         * Detach before releasing, and never throw.
+         *
+         * This now runs from inside `surfaceDestroyed` on every sleep, where
+         * ExoPlayer has its OWN callback registered on the same holder by
+         * [ExoPlayer.setVideoSurfaceView]. Ours is registered first so it runs
+         * first, which removes Exo's mid-dispatch — the framework then still
+         * calls Exo's `surfaceDestroyed` from its snapshot, against a player we
+         * already released. Believed benign in Media3, but a throw escaping here
+         * lands in the framework and crashes the box on sleep.
+         */
         override fun release() {
-            player?.release()
+            // Separate try blocks on purpose: a throw out of clearVideoSurface
+            // must not skip the release and strand the player.
+            try {
+                player?.clearVideoSurface()
+            } catch (_: Throwable) {
+            }
+            try {
+                player?.release()
+            } catch (_: Throwable) {
+            }
             player = null
         }
     }
@@ -612,10 +975,42 @@ class StbSurfacePlayerView(
     private companion object {
         const val STATS_INTERVAL_MS = 30_000L
 
+        /**
+         * Ceiling for the OPEN phase — fetching and parsing the source, before
+         * it reports ready. Deliberately generous: a slow VOD fetch on a weak
+         * box uplink is not a wedged decoder, and an open that truly fails
+         * raises an error rather than going quiet. This only has to stop a
+         * source that neither becomes ready nor errors from hanging forever.
+         */
+        const val OPEN_CEILING_MS = 60_000L
+
+        /**
+         * Hard cap from open() to the first frame, whatever the re-arms say.
+         * Guarantees the fallback still happens on a stream that keeps looking
+         * busy without ever drawing.
+         */
+        const val TOTAL_CEILING_MS = 90_000L
+
         /** Known-good path — give the platform parser room to commit. */
         const val MP_FIRST_FRAME_MS = 15_000L
 
         /** Secondary; if it has not drawn by now it is the wedge case. */
         const val EXO_FIRST_FRAME_MS = 12_000L
+
+        /**
+         * Same-engine RETRIES allowed while recovering from a sleep, before the
+         * normal engine cascade resumes. Three retries means four attempts, so
+         * the grace for Wi-Fi to re-associate and DHCP to finish — the
+         * realistic post-wake network gap — is
+         * `4 x watchdog + 3 x [WAKE_RETRY_DELAY_MS]`: ~69s on MediaPlayer,
+         * ~57s on ExoPlayer.
+         *
+         * Note the budget is spent per PAGE, not per wake: a page that has
+         * already cascaded to ExoPlayer starts its wake there, with the shorter
+         * watchdog and no cascade step left behind it, so it reaches NO_ENGINE
+         * straight after.
+         */
+        const val WAKE_RETRIES = 3
+        const val WAKE_RETRY_DELAY_MS = 3_000L
     }
 }

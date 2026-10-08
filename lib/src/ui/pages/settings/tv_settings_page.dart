@@ -1,6 +1,7 @@
 import 'package:app_localization/app_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:fndtv/src/ui/pages/settings/tv_kiosk_status_page.dart';
 import 'package:fndtv/src/ui/widgets/stb_screen_size/stb_screen_size.dart';
 import 'package:ui_kit/ui_kit.dart';
 
@@ -49,6 +50,19 @@ class TvSettingsPage extends StatelessWidget {
                 onSelected: () => Navigator.of(context).push<void>(
                   MaterialPageRoute<void>(
                     builder: (_) => const TvScreenSizePage(),
+                  ),
+                ),
+              ),
+              // Support/diagnostic entry. Intentionally in English and not
+              // localized: it exists to be read back over the phone or
+              // photographed and sent to us, not to be used by a subscriber.
+              _SettingsTile(
+                icon: Icons.fact_check_outlined,
+                title: 'Kiosk status',
+                subtitle: 'Launcher, root and device-owner state for support',
+                onSelected: () => Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const TvKioskStatusPage(),
                   ),
                 ),
               ),

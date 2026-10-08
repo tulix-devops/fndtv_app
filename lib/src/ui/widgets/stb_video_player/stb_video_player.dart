@@ -61,6 +61,9 @@ import 'package:ui_kit/ui_kit.dart';
 /// the feed is 1080i50 and needs to be normalised to progressive 1080p25 at
 /// the transcoder.
 
+/// One press of ←/→, or of the rewind/forward buttons.
+const int kStbSeekStepSeconds = 10;
+
 /// Set-top-box video player backed by **mpv** (media_kit) instead of
 /// ExoPlayer/Media3.
 ///
@@ -444,6 +447,36 @@ class _StbVideoPlayerState extends State<StbVideoPlayer> {
     _lastProgress = DateTime.now();
   }
 
+  /// Set once the finish has been acted on, so the watchdog tick and the
+  /// `completed` stream cannot both try to leave the page.
+  bool _leftOnFinish = false;
+
+  /// Whether an archive item has played to its end.
+  ///
+  /// Judged on the position rather than on media_kit's `completed` stream,
+  /// which did not fire on a real run. The tolerance covers a last segment
+  /// that stops a fraction short of the reported duration.
+  bool get _isVodFinished =>
+      !_isLive &&
+      _duration > Duration.zero &&
+      _progressSinceOpen &&
+      _position >= _duration - const Duration(seconds: 2);
+
+  /// Leaves the player when an archive item ends.
+  ///
+  /// Nothing is left to show, so holding the viewer on a dead last frame only
+  /// makes them press Back to escape it. Live never ends by itself — a
+  /// completion there means the feed dropped, which the stall watchdog above
+  /// treats as the failure it is.
+  void _onVodFinished() {
+    if (_leftOnFinish || !mounted) return;
+    _leftOnFinish = true;
+    _watchdog?.cancel();
+    logger.i('[player] VOD finished at ${_position.inSeconds}s '
+        'of ${_duration.inSeconds}s — leaving the player');
+    Navigator.of(context).maybePop();
+  }
+
   void _subscribe() {
     _subs.add(_player.stream.playing.listen((v) {
       if (!mounted) return;
@@ -463,6 +496,19 @@ class _StbVideoPlayerState extends State<StbVideoPlayer> {
     }));
     _subs.add(_player.stream.buffering.listen((v) {
       if (mounted) setState(() => _buffering = v);
+    }));
+    _subs.add(_player.stream.completed.listen((done) {
+      // Secondary to the position check in [_isVodFinished]: this stream did
+      // not fire at all on a real run, so it cannot be the only signal. Still
+      // worth having — when it does fire it is immediate, where the position
+      // check waits for a watchdog tick.
+      //
+      // `_progressSinceOpen` is the guard, not the position: media_kit can
+      // raise `completed` while a source is still being set up, and a startup
+      // hiccup must not bounce the viewer straight back out of the film.
+      if (!done || !mounted || _isLive) return;
+      if (_duration == Duration.zero || !_progressSinceOpen) return;
+      _onVodFinished();
     }));
     _subs.add(_player.stream.error.listen((e) {
       // Recorded, not acted on — see the stall-watchdog note above. The
@@ -681,6 +727,21 @@ class _StbVideoPlayerState extends State<StbVideoPlayer> {
   /// the overlay) only after [_maxRecoveryAttempts] reopens fail to revive it.
   void _checkForStall() {
     if (!mounted || _error != null) return;
+
+    // A FINISHED VOD IS NOT A STALL. Its position stops advancing because
+    // there is nothing left to play, and the watchdog's answer to that was to
+    // reopen the stream — silently restarting the film from the beginning,
+    // forever. Verified on the emulator: seeking a 7:10 video to its end put
+    // it back at 00:19 on the title card instead of ending.
+    //
+    // This is also the reliable finish signal. media_kit's `completed` stream
+    // did not fire at all in that run, so position-reaches-duration is what
+    // actually decides it.
+    if (_isVodFinished) {
+      _onVodFinished();
+      return;
+    }
+
     if (DateTime.now().difference(_lastProgress) < _stallTimeout) return;
 
     if (_recoveryAttempts >= _maxRecoveryAttempts) {
@@ -805,7 +866,10 @@ class _StbVideoPlayerState extends State<StbVideoPlayer> {
         if (cold) setState(() => _epgStatus = ScheduleStatus.error);
         return;
       }
-      final programs = sortedByStart(data.scheduleItems);
+      // From now onward only — the feed's window reaches back over the past
+      // day, and the strip is a "what's on / what's next" panel, not history.
+      final programs =
+          scheduleFromNow(sortedByStart(data.scheduleItems), DateTime.now());
       setState(() {
         _epgPrograms = programs;
         _epgLoadedAt = DateTime.now();
@@ -997,13 +1061,13 @@ class _StbVideoPlayerState extends State<StbVideoPlayer> {
     }
     if (key == LogicalKeyboardKey.arrowLeft) {
       if (!_isLive) {
-        _seekBy(-10);
+        _seekBy(-kStbSeekStepSeconds);
         return KeyEventResult.handled;
       }
     }
     if (key == LogicalKeyboardKey.arrowRight) {
       if (!_isLive) {
-        _seekBy(10);
+        _seekBy(kStbSeekStepSeconds);
         return KeyEventResult.handled;
       }
     }
@@ -1117,6 +1181,8 @@ class _StbVideoPlayerState extends State<StbVideoPlayer> {
                     visible: showControls && !_epgOpen,
                     playing: _playing,
                     isLive: _isLive,
+                    onRewind: () => _seekBy(-kStbSeekStepSeconds),
+                    onForward: () => _seekBy(kStbSeekStepSeconds),
                     position: _position,
                     duration: _duration,
                     onPlayPause: _togglePlay,
@@ -1230,6 +1296,8 @@ class _BottomBar extends StatelessWidget {
     required this.visible,
     required this.playing,
     required this.isLive,
+    required this.onRewind,
+    required this.onForward,
     required this.position,
     required this.duration,
     required this.onPlayPause,
@@ -1239,6 +1307,8 @@ class _BottomBar extends StatelessWidget {
   final bool visible;
   final bool playing;
   final bool isLive;
+  final VoidCallback onRewind;
+  final VoidCallback onForward;
   final Duration position;
   final Duration duration;
   final VoidCallback onPlayPause;
@@ -1280,6 +1350,15 @@ class _BottomBar extends StatelessWidget {
           ),
           child: Row(
             children: [
+              // Rewind / forward flank play·pause on VOD, mirroring what ←/→
+              // already do — a D-pad has no pointer, so these are what make
+              // seeking discoverable. Absent on live: nothing to seek through.
+              if (!isLive)
+                IconButton(
+                  onPressed: onRewind,
+                  icon: const Icon(Icons.replay_10_rounded,
+                      color: Colors.white, size: 30),
+                ),
               // Play / pause button.
               Container(
                 width: 52,
@@ -1297,6 +1376,12 @@ class _BottomBar extends StatelessWidget {
                   ),
                 ),
               ),
+              if (!isLive)
+                IconButton(
+                  onPressed: onForward,
+                  icon: const Icon(Icons.forward_10_rounded,
+                      color: Colors.white, size: 30),
+                ),
               const SizedBox(width: 18),
               // Wrapped in a single Expanded so the child (live pill's Spacer
               // or the seek bar's Expanded) always gets bounded width.

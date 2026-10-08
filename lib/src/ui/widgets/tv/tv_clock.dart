@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:fndtv/src/bloc/device_identity_cubit/device_identity_cubit.dart';
+import 'package:fndtv/src/core/services/stb_clock.dart';
 import 'package:fndtv/src/core/services/stb_system_service.dart';
 
 /// Top-right TV information block: the local-time clock, plus — on the set-top
@@ -36,7 +37,14 @@ class _TvClockState extends State<TvClock> {
     });
   }
 
-  String _now() => DateFormat('HH:mm').format(DateTime.now());
+  /// Rendered through [StbClock], not `DateTime.now()`.
+  ///
+  /// Setting the box's system timezone needs root, so on a box where `su` is
+  /// refused it stays wrong permanently — NTP corrects the absolute clock but
+  /// nothing corrects the zone, and this widget then shows an hour or two out.
+  /// StbClock resolves the real offset from geolocation and falls back to the
+  /// system zone until it has one.
+  String _now() => DateFormat('HH:mm').format(StbClock.instance.now());
 
   @override
   void dispose() {

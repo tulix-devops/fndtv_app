@@ -67,6 +67,25 @@ class StbSurfacePlayer extends StatefulWidget {
   State<StbSurfacePlayer> createState() => _StbSurfacePlayerState();
 }
 
+/// One press of ←/→, or of the rewind/forward buttons.
+const Duration _kSeekStep = Duration(seconds: 10);
+
+/// Whether a start failure should be handed to the mpv player.
+///
+/// Hand-off is a real cost on this hardware, not a neutral retry: mpv renders
+/// through a Flutter texture, which on the legacy boxes forces
+/// `mediacodec-copy` and runs short of realtime — the slow motion. So it is
+/// worth it only when the native engines genuinely cannot play the stream.
+///
+/// [provenPlayable] is what stops a stream that has already drawn on this box
+/// from being handed over just because a later open was slow or glitched.
+bool shouldHandOffToMpv({
+  required bool everHadFrame,
+  required bool provenPlayable,
+  required bool hasCallback,
+}) =>
+    hasCallback && !everHadFrame && !provenPlayable;
+
 class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
   static const Duration _controlsTimeout = Duration(seconds: 4);
   static const Duration _positionPoll = Duration(seconds: 1);
@@ -109,6 +128,21 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
   /// Never resets — records whether ANY engine produced picture, which decides
   /// error-overlay vs hand-off (see [StbSurfacePlayer.onUnplayable]).
   bool _everHadFrame = false;
+
+  /// Stream URLs that have produced a frame through the native engines during
+  /// this app session.
+  ///
+  /// Static on purpose. [_everHadFrame] lives on the widget, so it is false
+  /// again on every fresh open — and a viewer who restarted a film that had
+  /// been playing perfectly would have it declared unplayable and handed to the
+  /// mpv path, which on this hardware is the slow-motion one. That is exactly
+  /// what the field reported: paused, restarted, and it came back in slow
+  /// motion with the other player's controls. A stream that has drawn on this
+  /// box is not unplayable.
+  ///
+  /// Session-scoped rather than persisted: this is a claim about what worked a
+  /// few minutes ago, not a permanent property of the stream.
+  static final Set<String> _provenPlayable = <String>{};
   String? _error;
 
   Duration _position = Duration.zero;
@@ -191,6 +225,7 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
       case 'firstFrame':
         logger.i('[STB-surface] first frame');
         _everHadFrame = true;
+        _provenPlayable.add(widget.link);
         setState(() {
           _firstFrame = true;
           _buffering = false;
@@ -205,14 +240,34 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
         logger.i('[STB-surface] perf dropped=${map['droppedFrames']}');
       case 'completed':
         setState(() => _playing = false);
+        // A finished VOD has nothing left to show, so sitting on its last
+        // frame just leaves the viewer pressing Back to escape a dead screen.
+        // Live never ends by itself — a 'completed' there means the feed
+        // dropped, which is a failure to report, not a reason to walk out of
+        // the channel.
+        if (!_isLive) {
+          logger.i('[STB-surface] VOD finished — leaving the player');
+          Navigator.of(context).maybePop();
+        }
       case 'error':
         final message = map['message'] as String? ?? 'unknown';
         logger.w('[STB-surface] error: $message');
-        if (!_everHadFrame && widget.onUnplayable != null) {
+        if (shouldHandOffToMpv(
+          everHadFrame: _everHadFrame,
+          provenPlayable: _provenPlayable.contains(widget.link),
+          hasCallback: widget.onUnplayable != null,
+        )) {
           logger.w('[STB-surface] no engine could start this stream — '
               'handing back for the mpv path');
           widget.onUnplayable!();
           return;
+        }
+        if (!_everHadFrame && _provenPlayable.contains(widget.link)) {
+          // Refusing the hand-off on purpose: this stream has drawn on this box
+          // already, so the native engines can play it and mpv would only cost
+          // the viewer picture quality. Show the error and let them retry.
+          logger.w('[STB-surface] refusing mpv hand-off — this stream has '
+              'played on this box before; showing the error instead');
         }
         setState(() {
           _error = message;
@@ -250,7 +305,10 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
         if (cold) setState(() => _epgStatus = ScheduleStatus.error);
         return;
       }
-      final programs = sortedByStart(data.scheduleItems);
+      // From now onward only — the feed's window reaches back over the past
+      // day, and the strip is a "what's on / what's next" panel, not history.
+      final programs =
+          scheduleFromNow(sortedByStart(data.scheduleItems), DateTime.now());
       setState(() {
         _epgPrograms = programs;
         _epgLoadedAt = DateTime.now();
@@ -355,7 +413,11 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
 
   Future<void> _togglePlay() async {
     _revealControls();
-    await _method?.invokeMethod<void>(_playing ? 'pause' : 'play');
+    // The NATIVE side picks the direction, from the engine's own transport
+    // state. Deciding it here from `_playing` is what broke resume: MediaPlayer
+    // reports no state changes, so after a pause the flag stayed true and the
+    // next press sent `pause` again — the video could never be started back up.
+    await _method?.invokeMethod<void>('togglePlay');
   }
 
   Future<void> _seekBy(Duration delta) async {
@@ -452,10 +514,10 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
         unawaited(_togglePlay());
         return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowLeft:
-        unawaited(_seekBy(const Duration(seconds: -10)));
+        unawaited(_seekBy(-_kSeekStep));
         return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowRight:
-        unawaited(_seekBy(const Duration(seconds: 10)));
+        unawaited(_seekBy(_kSeekStep));
         return KeyEventResult.handled;
       case LogicalKeyboardKey.escape:
         // Keyboard convenience only. The remote's Back arrives as a platform
@@ -486,6 +548,10 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
           creationParams: <String, dynamic>{
             'url': widget.link,
             'autoplay': true,
+            // Decides what the native side does when the box wakes and the
+            // surface is re-created: archive resumes at the position it slept
+            // at, live goes back to the live edge.
+            'isLive': _isLive,
           },
           creationParamsCodec: const StandardMessageCodec(),
           onFocus: () => params.onFocusChanged(true),
@@ -559,6 +625,8 @@ class _StbSurfacePlayerState extends State<StbSurfacePlayer> {
                       position: _position,
                       duration: _duration,
                       onPlayPause: _togglePlay,
+                      onRewind: () => _seekBy(-_kSeekStep),
+                      onForward: () => _seekBy(_kSeekStep),
                       scheduleHint:
                           _epgAvailable ? context.l.sectionSchedule : null,
                     ),
@@ -663,6 +731,8 @@ class _SurfaceBottomBar extends StatelessWidget {
     required this.position,
     required this.duration,
     required this.onPlayPause,
+    required this.onRewind,
+    required this.onForward,
     this.scheduleHint,
   });
 
@@ -671,6 +741,8 @@ class _SurfaceBottomBar extends StatelessWidget {
   final Duration position;
   final Duration duration;
   final VoidCallback onPlayPause;
+  final VoidCallback onRewind;
+  final VoidCallback onForward;
 
   /// "Schedule" label shown beside a ↑ glyph, so the strip is discoverable.
   final String? scheduleHint;
@@ -695,6 +767,16 @@ class _SurfaceBottomBar extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // Rewind / forward flank play·pause on VOD. They mirror what ←/→ on
+          // the remote already do — a D-pad has no pointer, so these are the
+          // affordance that makes seeking discoverable at all. Hidden on live,
+          // where there is nothing to seek through.
+          if (!isLive)
+            IconButton(
+              onPressed: onRewind,
+              icon: const Icon(Icons.replay_10_rounded,
+                  color: Colors.white, size: 30),
+            ),
           IconButton(
             onPressed: onPlayPause,
             icon: Icon(
@@ -703,6 +785,12 @@ class _SurfaceBottomBar extends StatelessWidget {
               size: 34,
             ),
           ),
+          if (!isLive)
+            IconButton(
+              onPressed: onForward,
+              icon: const Icon(Icons.forward_10_rounded,
+                  color: Colors.white, size: 30),
+            ),
           const SizedBox(width: 12),
           if (isLive)
             Container(
@@ -721,11 +809,40 @@ class _SurfaceBottomBar extends StatelessWidget {
               ),
             )
           else
-            Text(
-              '${_fmt(position)} / ${_fmt(duration)}',
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
+            // Matches the mpv player's bar so a viewer cannot tell which engine
+            // their box happens to be running.
+            Expanded(
+              child: Row(
+                children: [
+                  Text(_fmt(position),
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 14)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: duration.inMilliseconds > 0
+                            ? (position.inMilliseconds /
+                                    duration.inMilliseconds)
+                                .clamp(0.0, 1.0)
+                            : 0.0,
+                        minHeight: 6,
+                        backgroundColor: Colors.white24,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          context.uiColors.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(_fmt(duration),
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 14)),
+                ],
+              ),
             ),
-          const Spacer(),
+          if (isLive) const Spacer(),
           if (scheduleHint != null)
             Row(
               mainAxisSize: MainAxisSize.min,

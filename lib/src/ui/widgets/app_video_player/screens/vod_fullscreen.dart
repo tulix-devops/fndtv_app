@@ -510,7 +510,10 @@ class _ScheduleHintState extends State<_ScheduleHint>
 String _dvrFmtTime(String? iso) {
   if (iso == null || iso.isEmpty) return '';
   try {
-    return DateFormat('HH:mm').format(DateTime.parse(iso).toLocal());
+    // Through StbClock, not toLocal() — see StbClock: the system zone stays
+    // wrong on a box where `su` is refused.
+    return DateFormat('HH:mm')
+        .format(StbClock.instance.toBoxLocal(DateTime.parse(iso)));
   } catch (_) {
     return '';
   }
